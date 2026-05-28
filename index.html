@@ -6,458 +6,577 @@
 <title>Astra – Flow Metrics Dashboard</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&family=Instrument+Serif:ital@0;1&display=swap');
-
   *{margin:0;padding:0;box-sizing:border-box}
-
   :root{
-    --bg:#0c0e13;
-    --surface:#14171e;
-    --surface2:#1b1f29;
-    --border:#262b38;
-    --text:#e2e4ea;
-    --text2:#8b90a0;
-    --accent:#6c8cff;
+    --bg:#0c0e13;--surface:#14171e;--surface2:#1b1f29;--border:#262b38;
+    --text:#e2e4ea;--text2:#8b90a0;--accent:#6c8cff;
+    --clr-small:#3dd9a0;--clr-medium:#f0c142;--clr-large:#f06a5e;--clr-xlarge:#c06cf6;
+    --p50:#3dd9a0;--p85:#f0c142;--p95:#f06a5e;
+  }
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:1.8rem 2.2rem}
+  header{display:flex;align-items:baseline;gap:1.2rem;margin-bottom:.3rem}
+  header h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:2.2rem;letter-spacing:-.02em;color:#fff}
+  .badge{font-size:.7rem;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);background:rgba(108,140,255,.12);padding:.22rem .6rem;border-radius:100px}
+  .subtitle{color:var(--text2);font-size:.82rem;margin-bottom:1.8rem;font-weight:300}
 
-    /* size palette */
-    --clr-small:#3dd9a0;
-    --clr-medium:#f0c142;
-    --clr-large:#f06a5e;
-    --clr-xlarge:#c06cf6;
+  /* Controls bar */
+  .controls{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:1.4rem;padding:.8rem 1rem;background:var(--surface);border:1px solid var(--border);border-radius:12px}
+  .ctrl-group{display:flex;align-items:center;gap:.5rem}
+  .ctrl-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);white-space:nowrap}
+  .ctrl-sep{width:1px;height:24px;background:var(--border);margin:0 .4rem}
+  .pct-btn{
+    background:var(--surface2);border:1px solid var(--border);color:var(--text2);
+    padding:.3rem .7rem;border-radius:100px;font-size:.72rem;font-family:'DM Sans',sans-serif;
+    cursor:pointer;transition:all .2s;font-weight:500;
+  }
+  .pct-btn:hover{border-color:var(--text2)}
+  .pct-btn.on-p50{background:rgba(61,217,160,.15);border-color:var(--p50);color:var(--p50)}
+  .pct-btn.on-p85{background:rgba(240,193,66,.15);border-color:var(--p85);color:var(--p85)}
+  .pct-btn.on-p95{background:rgba(240,106,94,.15);border-color:var(--p95);color:var(--p95)}
+  input[type=date]{
+    background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:.3rem .5rem;border-radius:8px;font-size:.75rem;font-family:'DM Sans',sans-serif;
+  }
+  input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.7)}
+  .btn{
+    background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:.35rem .8rem;border-radius:8px;font-size:.75rem;font-family:'DM Sans',sans-serif;
+    cursor:pointer;transition:all .15s;
+  }
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.primary{background:rgba(108,140,255,.15);border-color:var(--accent);color:var(--accent)}
+  .btn.primary:hover{background:rgba(108,140,255,.28)}
+  .btn.danger{color:var(--clr-large)}
+  .btn.danger:hover{border-color:var(--clr-large);background:rgba(240,106,94,.1)}
 
-    --p50:#3dd9a0;
-    --p85:#f0c142;
-    --p95:#f06a5e;
-  }
+  /* Legend */
+  .legend-bar{display:flex;gap:1.4rem;flex-wrap:wrap;margin-bottom:1.5rem}
+  .legend-bar .gt{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);align-self:center}
+  .legend-item{display:flex;align-items:center;gap:.35rem;font-size:.75rem;color:var(--text2)}
+  .legend-dot{width:9px;height:9px;border-radius:50%}
 
-  body{
-    font-family:'DM Sans',sans-serif;
-    background:var(--bg);
-    color:var(--text);
-    min-height:100vh;
-    padding:2rem 2.5rem;
-  }
-
-  header{
-    display:flex;
-    align-items:baseline;
-    gap:1.2rem;
-    margin-bottom:.4rem;
-  }
-  header h1{
-    font-family:'Instrument Serif',serif;
-    font-weight:400;
-    font-size:2.4rem;
-    letter-spacing:-.02em;
-    color:#fff;
-  }
-  header span.badge{
-    font-size:.72rem;
-    font-weight:500;
-    text-transform:uppercase;
-    letter-spacing:.1em;
-    color:var(--accent);
-    background:rgba(108,140,255,.12);
-    padding:.25rem .65rem;
-    border-radius:100px;
-  }
-  .subtitle{
-    color:var(--text2);
-    font-size:.85rem;
-    margin-bottom:2.4rem;
-    font-weight:300;
-  }
-
-  /* legend */
-  .legend-bar{
-    display:flex;
-    gap:1.6rem;
-    flex-wrap:wrap;
-    margin-bottom:2rem;
-  }
-  .legend-bar .group-title{
-    font-size:.7rem;
-    text-transform:uppercase;
-    letter-spacing:.08em;
-    color:var(--text2);
-    margin-right:-.4rem;
-    align-self:center;
-  }
-  .legend-item{
-    display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--text2);
-  }
-  .legend-dot{
-    width:10px;height:10px;border-radius:50%;
-  }
-
-  /* charts grid */
-  .charts{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:1.6rem;
-    margin-bottom:2.4rem;
-  }
+  /* Charts */
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:1.4rem;margin-bottom:1.4rem}
   @media(max-width:960px){.charts{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:1.3rem 1.4rem 1rem;position:relative;overflow:hidden}
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--p50),var(--p85),var(--p95));opacity:.5}
+  .card.corr-accent::before{background:linear-gradient(90deg,var(--accent),#c06cf6)}
+  .card h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:1.25rem;color:#fff;margin-bottom:.1rem}
+  .card .sub{font-size:.72rem;color:var(--text2);margin-bottom:1rem;font-weight:300}
+  .cw{position:relative;width:100%;height:320px}
+  .cw canvas{width:100%;height:100%;cursor:crosshair}
 
-  .chart-card{
-    background:var(--surface);
-    border:1px solid var(--border);
-    border-radius:14px;
-    padding:1.5rem 1.6rem 1.2rem;
-    position:relative;
-    overflow:hidden;
-  }
-  .chart-card::before{
-    content:'';position:absolute;top:0;left:0;right:0;height:2px;
-    background:linear-gradient(90deg,var(--p50),var(--p85),var(--p95));
-    opacity:.6;
-  }
-  .chart-card h2{
-    font-family:'Instrument Serif',serif;
-    font-weight:400;
-    font-size:1.35rem;
-    margin-bottom:.15rem;
-    color:#fff;
-  }
-  .chart-card .chart-sub{
-    font-size:.75rem;color:var(--text2);margin-bottom:1.1rem;font-weight:300;
-  }
+  /* Stats chips */
+  .corr-stats{display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap}
+  .stat-chip{background:var(--surface2);border-radius:9px;padding:.6rem .9rem;text-align:center;flex:1;min-width:90px}
+  .stat-chip .sl{font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:.2rem}
+  .stat-chip .sv{font-family:'Instrument Serif',serif;font-size:1.4rem;color:#fff}
+  .stat-chip .sd{font-size:.65rem;color:var(--text2);margin-top:.1rem}
+  .stat-chip.a{border-top:3px solid var(--accent)}
+  .stat-chip.b{border-top:3px solid #c06cf6}
+  .stat-chip.c{border-top:3px solid var(--clr-small)}
+  .interp{background:var(--surface2);border-radius:9px;padding:.9rem 1rem;font-size:.78rem;color:var(--text2);line-height:1.6}
+  .interp strong{color:var(--text);font-weight:500}
 
-  /* canvas wrapper */
-  .canvas-wrap{position:relative;width:100%;height:340px}
-  .canvas-wrap canvas{width:100%;height:100%}
+  /* Percentile cards */
+  .prow{display:grid;grid-template-columns:1fr 1fr;gap:1.4rem;margin-bottom:1.8rem}
+  @media(max-width:960px){.prow{grid-template-columns:1fr}}
+  .pcard{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:1.1rem 1.4rem}
+  .pcard h3{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:.7rem;font-weight:500}
+  .pvals{display:flex;gap:1.2rem;flex-wrap:wrap}
+  .pb{flex:1;min-width:85px;background:var(--surface2);border-radius:9px;padding:.8rem .9rem;text-align:center;transition:opacity .2s}
+  .pb .pl{font-size:.64rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);margin-bottom:.25rem}
+  .pb .pv{font-family:'Instrument Serif',serif;font-size:1.7rem;color:#fff}
+  .pb .pu{font-size:.68rem;color:var(--text2);margin-top:.1rem}
+  .pb.p50{border-top:3px solid var(--p50)}
+  .pb.p85{border-top:3px solid var(--p85)}
+  .pb.p95{border-top:3px solid var(--p95)}
+  .pb.dim{opacity:.28}
 
-  /* percentile cards */
-  .percentile-row{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:1.6rem;
-    margin-bottom:2.4rem;
-  }
-  @media(max-width:960px){.percentile-row{grid-template-columns:1fr}}
-  .pct-card{
-    background:var(--surface);
-    border:1px solid var(--border);
-    border-radius:14px;
-    padding:1.3rem 1.6rem;
-  }
-  .pct-card h3{
-    font-size:.8rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);
-    margin-bottom:.9rem;font-weight:500;
-  }
-  .pct-values{display:flex;gap:1.4rem;flex-wrap:wrap}
-  .pct-box{
-    flex:1;min-width:100px;
-    background:var(--surface2);
-    border-radius:10px;
-    padding:1rem 1.1rem;
-    text-align:center;
-  }
-  .pct-box .label{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:.35rem}
-  .pct-box .value{
-    font-family:'Instrument Serif',serif;
-    font-size:2rem;
-    color:#fff;
-  }
-  .pct-box .unit{font-size:.72rem;color:var(--text2);margin-top:.1rem}
-  .pct-box.p50{border-top:3px solid var(--p50)}
-  .pct-box.p85{border-top:3px solid var(--p85)}
-  .pct-box.p95{border-top:3px solid var(--p95)}
-
-  /* table */
-  .table-card{
-    background:var(--surface);
-    border:1px solid var(--border);
-    border-radius:14px;
-    padding:1.4rem 1.6rem;
-    overflow-x:auto;
-  }
-  .table-card h3{
-    font-family:'Instrument Serif',serif;
-    font-weight:400;font-size:1.2rem;color:#fff;margin-bottom:1rem;
-  }
-  table{width:100%;border-collapse:collapse;font-size:.78rem}
-  th{
-    text-align:left;padding:.55rem .6rem;
-    font-weight:500;text-transform:uppercase;letter-spacing:.06em;
-    color:var(--text2);font-size:.68rem;
-    border-bottom:1px solid var(--border);
-  }
-  td{
-    padding:.55rem .6rem;
-    border-bottom:1px solid rgba(38,43,56,.5);
-    color:var(--text);
-  }
+  /* Table */
+  .tcard{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:1.2rem 1.4rem;overflow-x:auto}
+  .tcard h3{font-family:'Instrument Serif',serif;font-weight:400;font-size:1.15rem;color:#fff;margin-bottom:.8rem}
+  table{width:100%;border-collapse:collapse;font-size:.75rem}
+  th{text-align:left;padding:.5rem .5rem;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);font-size:.65rem;border-bottom:1px solid var(--border)}
+  td{padding:.5rem .5rem;border-bottom:1px solid rgba(38,43,56,.4);color:var(--text)}
   tr:last-child td{border-bottom:none}
-  .size-pill{
-    display:inline-block;padding:.15rem .55rem;border-radius:100px;
-    font-size:.68rem;font-weight:500;
-  }
+  tr.excluded td{opacity:.3;text-decoration:line-through}
+  tr.excluded td:last-child{text-decoration:none}
+  tr{cursor:pointer;transition:opacity .2s}
+  tr:hover{background:rgba(108,140,255,.04)}
+  .pill{display:inline-block;padding:.12rem .5rem;border-radius:100px;font-size:.65rem;font-weight:500}
+  .toggle-icon{font-size:.8rem;cursor:pointer;opacity:.6;transition:opacity .15s}
+  .toggle-icon:hover{opacity:1}
 
-  /* tooltip */
-  #tooltip{
-    position:fixed;pointer-events:none;
-    background:rgba(20,23,30,.96);
-    border:1px solid var(--border);
-    border-radius:10px;
-    padding:.7rem .9rem;
-    font-size:.75rem;
-    line-height:1.5;
-    color:var(--text);
-    max-width:320px;
-    z-index:999;
-    opacity:0;
-    transition:opacity .15s;
-    backdrop-filter:blur(6px);
-  }
+  /* Add item modal */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.6rem;width:460px;max-width:92vw}
+  .modal h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:1.3rem;color:#fff;margin-bottom:1.2rem}
+  .field{margin-bottom:.9rem}
+  .field label{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:.3rem}
+  .field input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.45rem .6rem;border-radius:8px;font-size:.82rem;font-family:'DM Sans',sans-serif}
+  .field input:focus{outline:none;border-color:var(--accent)}
+  .modal-actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1.2rem}
+
+  #tooltip{position:fixed;pointer-events:none;background:rgba(20,23,30,.96);border:1px solid var(--border);border-radius:10px;padding:.6rem .8rem;font-size:.72rem;line-height:1.5;color:var(--text);max-width:310px;z-index:999;opacity:0;transition:opacity .12s;backdrop-filter:blur(6px)}
   #tooltip.show{opacity:1}
   #tooltip strong{color:#fff;font-weight:500}
-
-  .note{
-    font-size:.72rem;color:var(--text2);margin-top:1.6rem;text-align:center;font-style:italic;font-weight:300;
-  }
+  .note{font-size:.7rem;color:var(--text2);margin-top:1.4rem;text-align:center;font-style:italic;font-weight:300}
 </style>
 </head>
 <body>
+<header><h1>Astra</h1><span class="badge">Flow Metrics</span></header>
+<p class="subtitle">Lead Time &amp; Cycle Time scatter analysis · <span id="countBadge">19</span> active items · <span id="periodBadge">Oct 2025 – May 2026</span></p>
 
-<header>
-  <h1>Astra</h1>
-  <span class="badge">Flow Metrics</span>
-</header>
-<p class="subtitle">Lead Time &amp; Cycle Time scatter analysis · 19 work items · Oct 2025 – May 2026</p>
+<!-- CONTROLS -->
+<div class="controls">
+  <div class="ctrl-group">
+    <span class="ctrl-label">Percentiles</span>
+    <button class="pct-btn on-p50" data-p="p50" onclick="togglePct(this)">P50</button>
+    <button class="pct-btn on-p85" data-p="p85" onclick="togglePct(this)">P85</button>
+    <button class="pct-btn on-p95" data-p="p95" onclick="togglePct(this)">P95</button>
+  </div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">Period</span>
+    <input type="date" id="dateFrom" value="2025-10-01">
+    <span style="color:var(--text2);font-size:.75rem">→</span>
+    <input type="date" id="dateTo" value="2026-06-01">
+    <button class="btn" onclick="applyPeriod()">Apply</button>
+    <button class="btn danger" onclick="resetPeriod()">Reset</button>
+  </div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group">
+    <button class="btn primary" onclick="openModal()">＋ Add Item</button>
+    <button class="btn" onclick="restoreAll()">Restore All Hidden</button>
+  </div>
+</div>
 
 <div class="legend-bar">
-  <span class="group-title">Duration size:</span>
-  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-small)"></span>Small (≤ 14 d)</span>
-  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-medium)"></span>Medium (15–30 d)</span>
-  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-large)"></span>Large (31–100 d)</span>
-  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-xlarge)"></span>X-Large (> 100 d)</span>
+  <span class="gt">Cycle Time size:</span>
+  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-small)"></span>Small (≤ 10 d)</span>
+  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-medium)"></span>Medium (11–20 d)</span>
+  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-large)"></span>Large (21–50 d)</span>
+  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-xlarge)"></span>X-Large (&gt; 50 d)</span>
   <span style="flex:1"></span>
-  <span class="legend-item"><span style="width:2px;height:14px;background:var(--p50);display:inline-block;border-radius:1px"></span>P50</span>
-  <span class="legend-item"><span style="width:2px;height:14px;background:var(--p85);display:inline-block;border-radius:1px"></span>P85</span>
-  <span class="legend-item"><span style="width:2px;height:14px;background:var(--p95);display:inline-block;border-radius:1px"></span>P95</span>
+  <span class="legend-item" style="font-style:italic;opacity:.7">Click a dot or table row to toggle visibility</span>
 </div>
 
 <div class="charts">
-  <div class="chart-card">
-    <h2>Lead Time</h2>
-    <p class="chart-sub">From creation to completion (days)</p>
-    <div class="canvas-wrap"><canvas id="leadChart"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <h2>Cycle Time</h2>
-    <p class="chart-sub">From start of work to completion (days)</p>
-    <div class="canvas-wrap"><canvas id="cycleChart"></canvas></div>
+  <div class="card"><h2>Lead Time</h2><p class="sub">From creation to completion (days)</p><div class="cw"><canvas id="leadChart"></canvas></div></div>
+  <div class="card"><h2>Cycle Time</h2><p class="sub">From start of work to completion (days)</p><div class="cw"><canvas id="cycleChart"></canvas></div></div>
+</div>
+
+<div class="charts">
+  <div class="card corr-accent"><h2>Lead Time vs Cycle Time</h2><p class="sub">Correlation scatter with regression line</p><div class="cw"><canvas id="corrChart"></canvas></div></div>
+  <div class="card corr-accent">
+    <h2>Correlation Analysis</h2><p class="sub">Statistical relationship – auto-updates on data changes</p>
+    <div class="corr-stats">
+      <div class="stat-chip a"><div class="sl">Pearson r</div><div class="sv" id="statR">—</div><div class="sd" id="statRLabel">—</div></div>
+      <div class="stat-chip b"><div class="sl">R²</div><div class="sv" id="statR2">—</div><div class="sd" id="statR2Label">—</div></div>
+      <div class="stat-chip c"><div class="sl">Regression</div><div class="sv" id="statReg">—</div><div class="sd">Slope &amp; intercept</div></div>
+    </div>
+    <div class="interp" id="interpText"></div>
   </div>
 </div>
 
-<div class="percentile-row">
-  <div class="pct-card">
-    <h3>Lead Time Percentiles</h3>
-    <div class="pct-values">
-      <div class="pct-box p50"><div class="label">50th</div><div class="value" id="lp50"></div><div class="unit">days</div></div>
-      <div class="pct-box p85"><div class="label">85th</div><div class="value" id="lp85"></div><div class="unit">days</div></div>
-      <div class="pct-box p95"><div class="label">95th</div><div class="value" id="lp95"></div><div class="unit">days</div></div>
-    </div>
-  </div>
-  <div class="pct-card">
-    <h3>Cycle Time Percentiles</h3>
-    <div class="pct-values">
-      <div class="pct-box p50"><div class="label">50th</div><div class="value" id="cp50"></div><div class="unit">days</div></div>
-      <div class="pct-box p85"><div class="label">85th</div><div class="value" id="cp85"></div><div class="unit">days</div></div>
-      <div class="pct-box p95"><div class="label">95th</div><div class="value" id="cp95"></div><div class="unit">days</div></div>
-    </div>
-  </div>
+<div class="prow">
+  <div class="pcard"><h3>Lead Time Percentiles</h3><div class="pvals">
+    <div class="pb p50" id="lpb50"><div class="pl">50th</div><div class="pv" id="lp50">—</div><div class="pu">days</div></div>
+    <div class="pb p85" id="lpb85"><div class="pl">85th</div><div class="pv" id="lp85">—</div><div class="pu">days</div></div>
+    <div class="pb p95" id="lpb95"><div class="pl">95th</div><div class="pv" id="lp95">—</div><div class="pu">days</div></div>
+  </div></div>
+  <div class="pcard"><h3>Cycle Time Percentiles</h3><div class="pvals">
+    <div class="pb p50" id="cpb50"><div class="pl">50th</div><div class="pv" id="cp50">—</div><div class="pu">days</div></div>
+    <div class="pb p85" id="cpb85"><div class="pl">85th</div><div class="pv" id="cp85">—</div><div class="pu">days</div></div>
+    <div class="pb p95" id="cpb95"><div class="pl">95th</div><div class="pv" id="cp95">—</div><div class="pu">days</div></div>
+  </div></div>
 </div>
 
-<div class="table-card">
+<div class="tcard">
   <h3>Work Items Detail</h3>
-  <table>
-    <thead><tr><th>ID</th><th>Title</th><th>Created</th><th>Started</th><th>Closed</th><th>Lead (d)</th><th>Cycle (d)</th><th>Size</th></tr></thead>
-    <tbody id="tableBody"></tbody>
-  </table>
+  <table><thead><tr><th></th><th>ID</th><th>Title</th><th>Created</th><th>Started</th><th>Closed</th><th>Lead</th><th>Cycle</th><th>Size</th></tr></thead><tbody id="tableBody"></tbody></table>
 </div>
+<p class="note">Click any dot on a chart or any table row to exclude/include an item. All metrics recalculate live.</p>
 
-<p class="note">Note: Row 2140364 had a malformed Closed Date ("170/04/2026") — corrected to 2026-04-17. Size categories are based on lead time duration.</p>
+<!-- ADD ITEM MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2>Add New Work Item</h2>
+    <div class="field"><label>ID</label><input id="fId" type="number" placeholder="e.g. 2300000"></div>
+    <div class="field"><label>Title</label><input id="fTitle" placeholder="[Astra] ..."></div>
+    <div class="field"><label>Created Date</label><input id="fCreated" type="date"></div>
+    <div class="field"><label>Start Date</label><input id="fStarted" type="date"></div>
+    <div class="field"><label>Closed Date</label><input id="fClosed" type="date"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="addItem()">Add Item</button>
+    </div>
+  </div>
+</div>
 
 <div id="tooltip"></div>
 
 <script>
-const DATA = [
-  {id:2061938,title:"[Astra] Implement delta aggregation",created:"2025-10-15",started:"2026-04-22",closed:"2026-04-30",lead:197,cycle:8},
-  {id:2061939,title:"[Astra] Extend aggregations to other windows",created:"2025-10-15",started:"2026-04-13",closed:"2026-05-04",lead:201,cycle:21},
-  {id:2124509,title:"[Astra] Data ingestion into silver zone",created:"2025-11-26",started:"2026-02-26",closed:"2026-04-21",lead:146,cycle:54},
-  {id:2132057,title:"[Astra] Securing API: Only Permitted Access",created:"2025-11-27",started:"2026-04-29",closed:"2026-05-06",lead:160,cycle:7},
-  {id:2140364,title:"[Astra] Investigate Add-in solution re-usibility",created:"2025-11-30",started:"2026-03-27",closed:"2026-04-17",lead:138,cycle:21},
-  {id:2148795,title:"[Astra] Implement TSDB retention policy",created:"2025-12-02",started:"2026-04-10",closed:"2026-04-10",lead:129,cycle:0},
-  {id:2154965,title:"[Astra] Silver zone - historical data processing",created:"2025-12-09",started:"2026-02-12",closed:"2026-04-30",lead:142,cycle:77},
-  {id:2155825,title:"[Astra] Restructure tables (POC recommendations)",created:"2025-12-09",started:"2026-03-27",closed:"2026-04-10",lead:122,cycle:14},
-  {id:2196838,title:"[Astra] Deploy raw-to-silver pipeline",created:"2026-02-19",started:"2026-03-27",closed:"2026-04-07",lead:47,cycle:11},
-  {id:2197612,title:"[Astra] CICD pipeline for kafka2tsdb",created:"2026-02-20",started:"2026-04-14",closed:"2026-04-24",lead:63,cycle:10},
-  {id:2210335,title:"[Astra] Data pipelining with Orchestration API",created:"2026-03-09",started:"2026-03-19",closed:"2026-03-27",lead:18,cycle:8},
-  {id:2223324,title:"[Astra] Define and document access groups",created:"2026-03-17",started:"2026-04-01",closed:"2026-04-17",lead:31,cycle:16},
-  {id:2229021,title:"[Astra] Quick fix Kafka2store reprocessing",created:"2026-03-26",started:"2026-04-02",closed:"2026-04-07",lead:12,cycle:5},
-  {id:2231454,title:"[Astra] Integrating Orch API to raw2silver",created:"2026-04-01",started:"2026-04-10",closed:"2026-04-23",lead:22,cycle:13},
-  {id:2243025,title:"Confluent Cloud OAuth Migration",created:"2026-04-22",started:"2026-05-21",closed:"2026-05-25",lead:33,cycle:4},
-  {id:2243112,title:"[Astra] Create a Test TSDB instance",created:"2026-04-22",started:"2026-04-24",closed:"2026-05-07",lead:15,cycle:13},
-  {id:2244272,title:"[Astra] Daily Row Grouping in Parquet Write",created:"2026-04-24",started:"2026-04-30",closed:"2026-05-12",lead:18,cycle:12},
-  {id:2247763,title:"[Astra] API changes",created:"2026-04-30",started:"2026-05-05",closed:"2026-05-12",lead:12,cycle:7},
-  {id:2261512,title:"[Astra] Kafka Auth change astra-kafka2store",created:"2026-05-25",started:"2026-05-25",closed:"2026-05-26",lead:1,cycle:1}
+/* ====== DATA ====== */
+let DATA = [
+  {id:2061938,title:"[Astra] Implement delta aggregation",created:"2025-10-15",started:"2026-04-22",closed:"2026-04-30",excluded:false},
+  {id:2061939,title:"[Astra] Extend aggregations to other windows",created:"2025-10-15",started:"2026-04-13",closed:"2026-05-04",excluded:false},
+  {id:2124509,title:"[Astra] Data ingestion into silver zone",created:"2025-11-26",started:"2026-02-26",closed:"2026-04-21",excluded:false},
+  {id:2132057,title:"[Astra] Securing API: Only Permitted Access",created:"2025-11-27",started:"2026-04-29",closed:"2026-05-06",excluded:false},
+  {id:2140364,title:"[Astra] Investigate Add-in solution re-usibility",created:"2025-11-30",started:"2026-03-27",closed:"2026-04-17",excluded:false},
+  {id:2148795,title:"[Astra] Implement TSDB retention policy",created:"2025-12-02",started:"2026-04-10",closed:"2026-04-10",excluded:false},
+  {id:2154965,title:"[Astra] Silver zone - historical data processing",created:"2025-12-09",started:"2026-02-12",closed:"2026-04-30",excluded:false},
+  {id:2155825,title:"[Astra] Restructure tables (POC recommendations)",created:"2025-12-09",started:"2026-03-27",closed:"2026-04-10",excluded:false},
+  {id:2196838,title:"[Astra] Deploy raw-to-silver pipeline",created:"2026-02-19",started:"2026-03-27",closed:"2026-04-07",excluded:false},
+  {id:2197612,title:"[Astra] CICD pipeline for kafka2tsdb",created:"2026-02-20",started:"2026-04-14",closed:"2026-04-24",excluded:false},
+  {id:2210335,title:"[Astra] Data pipelining with Orchestration API",created:"2026-03-09",started:"2026-03-19",closed:"2026-03-27",excluded:false},
+  {id:2223324,title:"[Astra] Define and document access groups",created:"2026-03-17",started:"2026-04-01",closed:"2026-04-17",excluded:false},
+  {id:2229021,title:"[Astra] Quick fix Kafka2store reprocessing",created:"2026-03-26",started:"2026-04-02",closed:"2026-04-07",excluded:false},
+  {id:2231454,title:"[Astra] Integrating Orch API to raw2silver",created:"2026-04-01",started:"2026-04-10",closed:"2026-04-23",excluded:false},
+  {id:2243025,title:"Confluent Cloud OAuth Migration",created:"2026-04-22",started:"2026-05-21",closed:"2026-05-25",excluded:false},
+  {id:2243112,title:"[Astra] Create a Test TSDB instance",created:"2026-04-22",started:"2026-04-24",closed:"2026-05-07",excluded:false},
+  {id:2244272,title:"[Astra] Daily Row Grouping in Parquet Write",created:"2026-04-24",started:"2026-04-30",closed:"2026-05-12",excluded:false},
+  {id:2247763,title:"[Astra] API changes",created:"2026-04-30",started:"2026-05-05",closed:"2026-05-12",excluded:false},
+  {id:2261512,title:"[Astra] Kafka Auth change astra-kafka2store",created:"2026-05-25",started:"2026-05-25",closed:"2026-05-26",excluded:false}
 ];
 
-const PERCENTILES = {
-  lead:{p50:47,p85:150.2,p95:197.4},
-  cycle:{p50:11,p85:21,p95:56.3}
-};
+function enrichItem(d){
+  d.lead = Math.round((new Date(d.closed)-new Date(d.created))/(864e5));
+  d.cycle = Math.round((new Date(d.closed)-new Date(d.started))/(864e5));
+}
+DATA.forEach(enrichItem);
 
-function sizeCategory(days){
-  if(days<=14) return {label:'Small',color:'#3dd9a0'};
-  if(days<=30) return {label:'Medium',color:'#f0c142'};
-  if(days<=100) return {label:'Large',color:'#f06a5e'};
+/* ====== STATE ====== */
+let visiblePct = {p50:true,p85:true,p95:true};
+let periodFrom = new Date('2025-10-01');
+let periodTo = new Date('2026-06-01');
+
+function sizeCategory(c){
+  if(c<=10) return {label:'Small',color:'#3dd9a0'};
+  if(c<=20) return {label:'Medium',color:'#f0c142'};
+  if(c<=50) return {label:'Large',color:'#f06a5e'};
   return {label:'X-Large',color:'#c06cf6'};
 }
 
-/* --- Percentile cards --- */
-document.getElementById('lp50').textContent=PERCENTILES.lead.p50;
-document.getElementById('lp85').textContent=PERCENTILES.lead.p85.toFixed(1);
-document.getElementById('lp95').textContent=PERCENTILES.lead.p95.toFixed(1);
-document.getElementById('cp50').textContent=PERCENTILES.cycle.p50;
-document.getElementById('cp85').textContent=PERCENTILES.cycle.p85.toFixed(1);
-document.getElementById('cp95').textContent=PERCENTILES.cycle.p95.toFixed(1);
+function activeData(){
+  return DATA.filter(d=>{
+    if(d.excluded) return false;
+    const cl=new Date(d.closed);
+    return cl>=periodFrom && cl<=periodTo;
+  });
+}
 
-/* --- Table --- */
-const tbody=document.getElementById('tableBody');
-DATA.forEach(d=>{
-  const s=sizeCategory(d.lead);
-  const tr=document.createElement('tr');
-  tr.innerHTML=`<td>${d.id}</td><td>${d.title}</td><td>${d.created}</td><td>${d.started}</td><td>${d.closed}</td><td>${d.lead}</td><td>${d.cycle}</td><td><span class="size-pill" style="background:${s.color}22;color:${s.color}">${s.label}</span></td>`;
-  tbody.appendChild(tr);
-});
+function percentile(arr,p){
+  if(!arr.length) return 0;
+  const s=[...arr].sort((a,b)=>a-b);
+  const i=(p/100)*(s.length-1);
+  const lo=Math.floor(i),hi=Math.ceil(i);
+  return lo===hi?s[lo]:s[lo]+(s[hi]-s[lo])*(i-lo);
+}
 
-/* --- Scatter Charts --- */
+function linReg(xs,ys){
+  const n=xs.length;
+  if(n<2) return {slope:0,intercept:0,r:0,r2:0};
+  const mx=xs.reduce((a,b)=>a+b,0)/n, my=ys.reduce((a,b)=>a+b,0)/n;
+  let sxy=0,sxx=0,syy=0;
+  for(let i=0;i<n;i++){const dx=xs[i]-mx,dy=ys[i]-my;sxy+=dx*dy;sxx+=dx*dx;syy+=dy*dy}
+  const slope=sxx?sxy/sxx:0;
+  const intercept=my-slope*mx;
+  const r=(sxx&&syy)?sxy/Math.sqrt(sxx*syy):0;
+  return {slope,intercept,r,r2:r*r};
+}
+
+/* ====== PERCENTILE HIGHLIGHT ====== */
+function pctHighlight(){
+  // Determine which items fall within the active percentile band for lead & cycle
+  // If exactly one percentile is active, highlight only items <= that percentile
+  // Otherwise no special highlighting
+  const activePcts = Object.entries(visiblePct).filter(([,v])=>v).map(([k])=>k);
+  // dim the percentile value boxes that are toggled off
+  ['p50','p85','p95'].forEach(pk=>{
+    const on = visiblePct[pk];
+    document.getElementById('lpb'+pk.slice(1)).classList.toggle('dim',!on);
+    document.getElementById('cpb'+pk.slice(1)).classList.toggle('dim',!on);
+  });
+}
+
+/* ====== TOGGLE / CONTROLS ====== */
+function togglePct(btn){
+  const p=btn.dataset.p;
+  visiblePct[p]=!visiblePct[p];
+  btn.classList.toggle('on-'+p);
+  pctHighlight();
+  redrawAll();
+}
+function toggleItem(id){
+  const d=DATA.find(x=>x.id===id);
+  if(d) d.excluded=!d.excluded;
+  redrawAll();
+}
+function restoreAll(){DATA.forEach(d=>d.excluded=false);redrawAll()}
+function applyPeriod(){
+  periodFrom=new Date(document.getElementById('dateFrom').value);
+  periodTo=new Date(document.getElementById('dateTo').value);
+  redrawAll();
+}
+function resetPeriod(){
+  periodFrom=new Date('2025-10-01');periodTo=new Date('2026-06-01');
+  document.getElementById('dateFrom').value='2025-10-01';
+  document.getElementById('dateTo').value='2026-06-01';
+  redrawAll();
+}
+function openModal(){document.getElementById('modalOverlay').classList.add('open')}
+function closeModal(){document.getElementById('modalOverlay').classList.remove('open')}
+document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal()});
+function addItem(){
+  const id=parseInt(document.getElementById('fId').value);
+  const title=document.getElementById('fTitle').value.trim();
+  const created=document.getElementById('fCreated').value;
+  const started=document.getElementById('fStarted').value;
+  const closed=document.getElementById('fClosed').value;
+  if(!id||!title||!created||!started||!closed){alert('Please fill all fields');return}
+  if(DATA.find(d=>d.id===id)){alert('ID already exists');return}
+  const item={id,title,created,started,closed,excluded:false};
+  enrichItem(item);
+  DATA.push(item);
+  closeModal();
+  ['fId','fTitle','fCreated','fStarted','fClosed'].forEach(x=>document.getElementById(x).value='');
+  redrawAll();
+}
+
+/* ====== TOOLTIP ====== */
 const tooltip=document.getElementById('tooltip');
+function showTip(e,html){tooltip.classList.add('show');tooltip.innerHTML=html;let tx=e.clientX+12,ty=e.clientY-8;if(tx+310>window.innerWidth)tx=e.clientX-320;if(ty<5)ty=5;tooltip.style.left=tx+'px';tooltip.style.top=ty+'px'}
+function hideTip(){tooltip.classList.remove('show')}
 
-function drawScatter(canvasId, dataKey, percentiles){
+/* ====== PERCENTILE-BASED OPACITY ====== */
+function dotOpacity(val, pctVals, dataKey){
+  // If exactly one percentile is active, dim items outside that band
+  const activePcts = Object.entries(visiblePct).filter(([,v])=>v).map(([k])=>k);
+  if(activePcts.length !== 1) return 1;
+  const pk = activePcts[0];
+  const threshold = pctVals[pk];
+  if(pk==='p50') return val <= threshold ? 1 : 0.15;
+  if(pk==='p85') return val <= threshold ? 1 : 0.15;
+  if(pk==='p95') return val <= threshold ? 1 : 0.15;
+  return 1;
+}
+
+/* ====== SCATTER ====== */
+function drawScatter(canvasId, dataKey, pctVals){
   const canvas=document.getElementById(canvasId);
   const ctx=canvas.getContext('2d');
   const dpr=window.devicePixelRatio||1;
   const rect=canvas.parentElement.getBoundingClientRect();
-  canvas.width=rect.width*dpr;
-  canvas.height=rect.height*dpr;
+  canvas.width=rect.width*dpr;canvas.height=rect.height*dpr;
+  canvas.style.width=rect.width+'px';canvas.style.height=rect.height+'px';
   ctx.scale(dpr,dpr);
-  const W=rect.width, H=rect.height;
+  const W=rect.width,H=rect.height;
+  const pad={top:18,right:28,bottom:42,left:48};
+  const pw=W-pad.left-pad.right,ph=H-pad.top-pad.bottom;
 
-  const pad={top:20,right:30,bottom:42,left:50};
-  const pw=W-pad.left-pad.right;
-  const ph=H-pad.top-pad.bottom;
+  const items=activeData().sort((a,b)=>new Date(a.closed)-new Date(b.closed));
+  if(!items.length){ctx.fillStyle='#8b90a0';ctx.font='13px DM Sans';ctx.textAlign='center';ctx.fillText('No items in this period',W/2,H/2);return}
 
-  // sorted by closed date
-  const sorted=[...DATA].sort((a,b)=>new Date(a.closed)-new Date(b.closed));
-  const vals=sorted.map(d=>d[dataKey]);
-  const maxVal=Math.max(...vals)*1.12;
-  const dates=sorted.map(d=>new Date(d.closed));
-  const minDate=new Date(Math.min(...dates));
-  const maxDate=new Date(Math.max(...dates));
+  const vals=items.map(d=>d[dataKey]);
+  const maxVal=Math.max(...vals,1)*1.15;
+  const dates=items.map(d=>new Date(d.closed));
+  const minDate=periodFrom,maxDate=periodTo;
   const dateRange=maxDate-minDate||1;
 
-  function xPos(date){return pad.left+((date-minDate)/dateRange)*pw}
-  function yPos(val){return pad.top+ph-(val/maxVal)*ph}
+  const xPos=dt=>pad.left+((dt-minDate)/dateRange)*pw;
+  const yPos=v=>pad.top+ph-(v/maxVal)*ph;
 
   // grid
-  ctx.strokeStyle='#262b38';
-  ctx.lineWidth=.5;
-  const yTicks=5;
-  for(let i=0;i<=yTicks;i++){
-    const y=pad.top+(ph/yTicks)*i;
+  ctx.strokeStyle='#262b38';ctx.lineWidth=.5;
+  for(let i=0;i<=5;i++){
+    const y=pad.top+(ph/5)*i;
     ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(W-pad.right,y);ctx.stroke();
-    const v=Math.round(maxVal-(maxVal/yTicks)*i);
-    ctx.fillStyle='#8b90a0';ctx.font='11px DM Sans';ctx.textAlign='right';
-    ctx.fillText(v,pad.left-8,y+4);
+    ctx.fillStyle='#8b90a0';ctx.font='10px DM Sans';ctx.textAlign='right';
+    ctx.fillText(Math.round(maxVal-(maxVal/5)*i),pad.left-7,y+3);
   }
-
-  // x labels
-  ctx.textAlign='center';
-  ctx.fillStyle='#8b90a0';ctx.font='11px DM Sans';
-  const months=new Set();
-  sorted.forEach(d=>{
-    const dt=new Date(d.closed);
-    const key=dt.getFullYear()+'-'+(dt.getMonth()+1);
-    if(!months.has(key)){
-      months.add(key);
-      const label=dt.toLocaleDateString('en',{month:'short',year:'2-digit'});
-      ctx.fillText(label,xPos(dt),H-pad.bottom+28);
-    }
-  });
-
-  // axis label
-  ctx.save();ctx.translate(14,pad.top+ph/2);ctx.rotate(-Math.PI/2);
-  ctx.fillStyle='#8b90a0';ctx.font='11px DM Sans';ctx.textAlign='center';
-  ctx.fillText('Days',0,0);ctx.restore();
-  ctx.fillStyle='#8b90a0';ctx.font='11px DM Sans';ctx.textAlign='center';
+  // x ticks: months
+  ctx.textAlign='center';ctx.fillStyle='#8b90a0';ctx.font='10px DM Sans';
+  let d=new Date(periodFrom);d.setDate(1);
+  while(d<=periodTo){
+    const x=xPos(d);
+    if(x>=pad.left&&x<=W-pad.right) ctx.fillText(d.toLocaleDateString('en',{month:'short',year:'2-digit'}),x,H-pad.bottom+26);
+    d.setMonth(d.getMonth()+1);
+  }
+  // axis
+  ctx.save();ctx.translate(12,pad.top+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Days',0,0);ctx.restore();
   ctx.fillText('Closed Date',pad.left+pw/2,H-2);
 
   // percentile lines
-  const pColors=['#3dd9a0','#f0c142','#f06a5e'];
-  const pLabels=['P50','P85','P95'];
-  const pVals=[percentiles.p50,percentiles.p85,percentiles.p95];
-  pVals.forEach((pv,i)=>{
-    if(pv>maxVal) return;
+  const pc={p50:'#3dd9a0',p85:'#f0c142',p95:'#f06a5e'};
+  const pl={p50:'P50',p85:'P85',p95:'P95'};
+  ['p50','p85','p95'].forEach(pk=>{
+    if(!visiblePct[pk]) return;
+    const pv=pctVals[pk]; if(pv>maxVal) return;
     const y=yPos(pv);
-    ctx.setLineDash([6,4]);
-    ctx.strokeStyle=pColors[i];
-    ctx.lineWidth=1.4;
-    ctx.globalAlpha=.7;
+    ctx.setLineDash([5,3]);ctx.strokeStyle=pc[pk];ctx.lineWidth=1.3;ctx.globalAlpha=.65;
     ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(W-pad.right,y);ctx.stroke();
-    ctx.globalAlpha=1;
-    ctx.setLineDash([]);
-    ctx.fillStyle=pColors[i];ctx.font='bold 10px DM Sans';ctx.textAlign='left';
-    ctx.fillText(pLabels[i]+' = '+pv.toFixed(pv%1?1:0)+' d',W-pad.right+4,y+3);
+    ctx.globalAlpha=1;ctx.setLineDash([]);
+    ctx.fillStyle=pc[pk];ctx.font='bold 9px DM Sans';ctx.textAlign='left';
+    ctx.fillText(pl[pk]+' = '+pv.toFixed(pv%1?1:0)+' d',W-pad.right-70,y-5);
   });
 
   // dots
   const dots=[];
-  sorted.forEach((d,i)=>{
+  items.forEach((d,i)=>{
     const val=d[dataKey];
-    const s=sizeCategory(d.lead);
-    const cx=xPos(dates[i]);
-    const cy=yPos(val);
-    const r=val===0?4:Math.min(8,Math.max(5,val/maxVal*14));
+    const s=sizeCategory(d.cycle);
+    const cx=xPos(dates[i]),cy=yPos(val);
+    const r=Math.min(8,Math.max(4.5,val/maxVal*14));
+    const alpha=dotOpacity(val, pctVals, dataKey);
 
+    ctx.save();ctx.globalAlpha=alpha;
+    ctx.shadowColor=s.color;ctx.shadowBlur=7;
     ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
     ctx.fillStyle=s.color+'cc';ctx.fill();
-    ctx.strokeStyle=s.color;ctx.lineWidth=1.5;ctx.stroke();
-
-    dots.push({cx,cy,r:r+3,d,val});
+    ctx.shadowBlur=0;ctx.strokeStyle=s.color;ctx.lineWidth=1.3;ctx.stroke();
+    ctx.restore();
+    dots.push({cx,cy,r:r+3,d,val,alpha});
   });
 
-  // hover
-  canvas.addEventListener('mousemove',e=>{
-    const br=canvas.getBoundingClientRect();
-    const mx=(e.clientX-br.left);
-    const my=(e.clientY-br.top);
-    let hit=null;
-    for(const dot of dots){
-      if(Math.hypot(mx-dot.cx,my-dot.cy)<dot.r){hit=dot;break}
-    }
-    if(hit){
-      tooltip.classList.add('show');
-      tooltip.innerHTML=`<strong>${hit.d.title}</strong><br>ID: ${hit.d.id}<br>Created: ${hit.d.created} → Closed: ${hit.d.closed}<br><strong>${dataKey==='lead'?'Lead':'Cycle'} Time: ${hit.val} days</strong><br>Size: ${sizeCategory(hit.d.lead).label}`;
-      let tx=e.clientX+14, ty=e.clientY-10;
-      if(tx+320>window.innerWidth) tx=e.clientX-330;
-      tooltip.style.left=tx+'px';tooltip.style.top=ty+'px';
-    } else {
-      tooltip.classList.remove('show');
-    }
-  });
-  canvas.addEventListener('mouseleave',()=>tooltip.classList.remove('show'));
+  canvas.onmousemove=e=>{
+    const br=canvas.getBoundingClientRect();const mx=e.clientX-br.left,my=e.clientY-br.top;
+    let hit=null;for(const dot of dots)if(Math.hypot(mx-dot.cx,my-dot.cy)<dot.r){hit=dot;break}
+    canvas.style.cursor=hit?'pointer':'crosshair';
+    if(hit) showTip(e,`<strong>${hit.d.title}</strong><br>ID: ${hit.d.id}<br>${hit.d.created} → ${hit.d.closed}<br><strong>${dataKey==='lead'?'Lead':'Cycle'}: ${hit.val} d</strong> · Size: ${sizeCategory(hit.d.cycle).label}<br><em style="color:var(--text2)">Click to ${hit.d.excluded?'restore':'exclude'}</em>`);
+    else hideTip();
+  };
+  canvas.onclick=e=>{
+    const br=canvas.getBoundingClientRect();const mx=e.clientX-br.left,my=e.clientY-br.top;
+    for(const dot of dots)if(Math.hypot(mx-dot.cx,my-dot.cy)<dot.r){toggleItem(dot.d.id);hideTip();return}
+  };
+  canvas.onmouseleave=hideTip;
 }
 
-drawScatter('leadChart','lead',PERCENTILES.lead);
-drawScatter('cycleChart','cycle',PERCENTILES.cycle);
+/* ====== CORRELATION ====== */
+function drawCorrelation(){
+  const canvas=document.getElementById('corrChart');
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const rect=canvas.parentElement.getBoundingClientRect();
+  canvas.width=rect.width*dpr;canvas.height=rect.height*dpr;
+  canvas.style.width=rect.width+'px';canvas.style.height=rect.height+'px';
+  ctx.scale(dpr,dpr);
+  const W=rect.width,H=rect.height;
+  const pad={top:18,right:18,bottom:46,left:52};
+  const pw=W-pad.left-pad.right,ph=H-pad.top-pad.bottom;
 
-window.addEventListener('resize',()=>{
-  drawScatter('leadChart','lead',PERCENTILES.lead);
-  drawScatter('cycleChart','cycle',PERCENTILES.cycle);
-});
+  const items=activeData();
+  if(items.length<2){ctx.fillStyle='#8b90a0';ctx.font='13px DM Sans';ctx.textAlign='center';ctx.fillText('Need ≥ 2 items',W/2,H/2);return}
+
+  const reg=linReg(items.map(d=>d.lead),items.map(d=>d.cycle));
+  const maxL=Math.max(...items.map(d=>d.lead))*1.1;
+  const maxC=Math.max(...items.map(d=>d.cycle))*1.15;
+  const xP=v=>pad.left+(v/maxL)*pw;
+  const yP=v=>pad.top+ph-(v/maxC)*ph;
+
+  // grid
+  ctx.strokeStyle='#262b38';ctx.lineWidth=.5;
+  for(let i=0;i<=5;i++){
+    const y=pad.top+(ph/5)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(W-pad.right,y);ctx.stroke();
+    ctx.fillStyle='#8b90a0';ctx.font='10px DM Sans';ctx.textAlign='right';ctx.fillText(Math.round(maxC-(maxC/5)*i),pad.left-7,y+3);
+    const x=pad.left+(pw/5)*i;ctx.beginPath();ctx.moveTo(x,pad.top);ctx.lineTo(x,pad.top+ph);ctx.stroke();
+    ctx.textAlign='center';ctx.fillText(Math.round((maxL/5)*i),x,H-pad.bottom+16);
+  }
+  ctx.save();ctx.translate(12,pad.top+ph/2);ctx.rotate(-Math.PI/2);ctx.fillStyle='#8b90a0';ctx.font='10px DM Sans';ctx.textAlign='center';ctx.fillText('Cycle Time (d)',0,0);ctx.restore();
+  ctx.fillStyle='#8b90a0';ctx.font='10px DM Sans';ctx.textAlign='center';ctx.fillText('Lead Time (d)',pad.left+pw/2,H-2);
+
+  // regression line
+  const y0c=reg.intercept,y1c=reg.slope*maxL+reg.intercept;
+  ctx.setLineDash([7,3]);ctx.strokeStyle='#6c8cff';ctx.lineWidth=1.8;ctx.globalAlpha=.55;
+  ctx.beginPath();ctx.moveTo(xP(0),yP(Math.max(0,y0c)));ctx.lineTo(xP(maxL),yP(Math.min(maxC,y1c)));ctx.stroke();
+  ctx.globalAlpha=1;ctx.setLineDash([]);
+  ctx.fillStyle='#6c8cff';ctx.font='bold 9px DM Sans';ctx.textAlign='left';
+  ctx.fillText('y = '+reg.slope.toFixed(2)+'x + '+reg.intercept.toFixed(1),xP(maxL*.35),yP(reg.slope*maxL*.35+reg.intercept)-10);
+
+  // dots
+  const dots=[];
+  items.forEach(d=>{
+    const s=sizeCategory(d.cycle);const cx=xP(d.lead),cy=yP(d.cycle),r=5.5;
+    ctx.save();ctx.shadowColor=s.color;ctx.shadowBlur=7;
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle=s.color+'cc';ctx.fill();ctx.restore();
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.strokeStyle=s.color;ctx.lineWidth=1.3;ctx.stroke();
+    dots.push({cx,cy,r:r+3,d});
+  });
+
+  canvas.onmousemove=e=>{
+    const br=canvas.getBoundingClientRect();const mx=e.clientX-br.left,my=e.clientY-br.top;
+    let hit=null;for(const dot of dots)if(Math.hypot(mx-dot.cx,my-dot.cy)<dot.r){hit=dot;break}
+    canvas.style.cursor=hit?'pointer':'crosshair';
+    if(hit)showTip(e,`<strong>${hit.d.title}</strong><br>Lead: ${hit.d.lead} d · Cycle: ${hit.d.cycle} d · ${sizeCategory(hit.d.cycle).label}<br><em style="color:var(--text2)">Click to exclude</em>`);
+    else hideTip();
+  };
+  canvas.onclick=e=>{
+    const br=canvas.getBoundingClientRect();const mx=e.clientX-br.left,my=e.clientY-br.top;
+    for(const dot of dots)if(Math.hypot(mx-dot.cx,my-dot.cy)<dot.r){toggleItem(dot.d.id);hideTip();return}
+  };
+  canvas.onmouseleave=hideTip;
+
+  // update stats panel
+  document.getElementById('statR').textContent=reg.r.toFixed(2);
+  const rAbs=Math.abs(reg.r);
+  document.getElementById('statRLabel').textContent=rAbs<.3?'Weak':(rAbs<.6?'Moderate':'Strong')+' '+(reg.r>=0?'positive':'negative');
+  document.getElementById('statR2').textContent=reg.r2.toFixed(2);
+  document.getElementById('statR2Label').textContent=Math.round(reg.r2*100)+'% variance explained';
+  document.getElementById('statReg').textContent='y = '+reg.slope.toFixed(2)+'x + '+reg.intercept.toFixed(1);
+  const pct=Math.round(reg.r2*100);
+  document.getElementById('interpText').innerHTML=`<strong>Interpretation:</strong> The ${rAbs<.3?'weak':(rAbs<.6?'moderate':'strong')} correlation (r = ${reg.r.toFixed(2)}) indicates that lead time and cycle time are ${rAbs<.3?'largely independent':'partially linked'}. R² = ${reg.r2.toFixed(2)} means <strong>${pct}%</strong> of cycle time variability is explained by lead time — the other <strong>${100-pct}%</strong> depends on task complexity, dependencies, and team capacity. Based on ${items.length} active items in the current view.`;
+}
+
+/* ====== TABLE ====== */
+function renderTable(){
+  const tbody=document.getElementById('tableBody');
+  tbody.innerHTML='';
+  DATA.forEach(d=>{
+    const inPeriod = new Date(d.closed)>=periodFrom && new Date(d.closed)<=periodTo;
+    if(!inPeriod && !d.excluded) return; // hide out-of-period unless explicitly excluded
+    if(!inPeriod) return;
+    const s=sizeCategory(d.cycle);
+    const tr=document.createElement('tr');
+    if(d.excluded) tr.classList.add('excluded');
+    tr.onclick=()=>toggleItem(d.id);
+    tr.innerHTML=`<td>${d.excluded?'👁️‍🗨️':'⊘'}</td><td>${d.id}</td><td>${d.title}</td><td>${d.created}</td><td>${d.started}</td><td>${d.closed}</td><td>${d.lead}</td><td>${d.cycle}</td><td><span class="pill" style="background:${s.color}22;color:${s.color}">${s.label}</span></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ====== MASTER REDRAW ====== */
+function redrawAll(){
+  const items=activeData();
+  const leads=items.map(d=>d.lead),cycles=items.map(d=>d.cycle);
+
+  const lPct={p50:percentile(leads,50),p85:percentile(leads,85),p95:percentile(leads,95)};
+  const cPct={p50:percentile(cycles,50),p85:percentile(cycles,85),p95:percentile(cycles,95)};
+
+  // update percentile cards
+  document.getElementById('lp50').textContent=lPct.p50.toFixed(lPct.p50%1?1:0);
+  document.getElementById('lp85').textContent=lPct.p85.toFixed(1);
+  document.getElementById('lp95').textContent=lPct.p95.toFixed(1);
+  document.getElementById('cp50').textContent=cPct.p50.toFixed(cPct.p50%1?1:0);
+  document.getElementById('cp85').textContent=cPct.p85.toFixed(1);
+  document.getElementById('cp95').textContent=cPct.p95.toFixed(1);
+
+  // subtitle
+  document.getElementById('countBadge').textContent=items.length;
+  const fmt=d=>d.toLocaleDateString('en',{month:'short',year:'numeric'});
+  document.getElementById('periodBadge').textContent=fmt(periodFrom)+' – '+fmt(periodTo);
+
+  pctHighlight();
+  drawScatter('leadChart','lead',lPct);
+  drawScatter('cycleChart','cycle',cPct);
+  drawCorrelation();
+  renderTable();
+}
+
+redrawAll();
+window.addEventListener('resize',redrawAll);
 </script>
 </body>
 </html>
