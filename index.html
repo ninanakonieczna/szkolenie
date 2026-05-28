@@ -1,1 +1,463 @@
-Cokolwiek
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Astra – Flow Metrics Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&family=Instrument+Serif:ital@0;1&display=swap');
+
+  *{margin:0;padding:0;box-sizing:border-box}
+
+  :root{
+    --bg:#0c0e13;
+    --surface:#14171e;
+    --surface2:#1b1f29;
+    --border:#262b38;
+    --text:#e2e4ea;
+    --text2:#8b90a0;
+    --accent:#6c8cff;
+
+    /* size palette */
+    --clr-small:#3dd9a0;
+    --clr-medium:#f0c142;
+    --clr-large:#f06a5e;
+    --clr-xlarge:#c06cf6;
+
+    --p50:#3dd9a0;
+    --p85:#f0c142;
+    --p95:#f06a5e;
+  }
+
+  body{
+    font-family:'DM Sans',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+    padding:2rem 2.5rem;
+  }
+
+  header{
+    display:flex;
+    align-items:baseline;
+    gap:1.2rem;
+    margin-bottom:.4rem;
+  }
+  header h1{
+    font-family:'Instrument Serif',serif;
+    font-weight:400;
+    font-size:2.4rem;
+    letter-spacing:-.02em;
+    color:#fff;
+  }
+  header span.badge{
+    font-size:.72rem;
+    font-weight:500;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    color:var(--accent);
+    background:rgba(108,140,255,.12);
+    padding:.25rem .65rem;
+    border-radius:100px;
+  }
+  .subtitle{
+    color:var(--text2);
+    font-size:.85rem;
+    margin-bottom:2.4rem;
+    font-weight:300;
+  }
+
+  /* legend */
+  .legend-bar{
+    display:flex;
+    gap:1.6rem;
+    flex-wrap:wrap;
+    margin-bottom:2rem;
+  }
+  .legend-bar .group-title{
+    font-size:.7rem;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--text2);
+    margin-right:-.4rem;
+    align-self:center;
+  }
+  .legend-item{
+    display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--text2);
+  }
+  .legend-dot{
+    width:10px;height:10px;border-radius:50%;
+  }
+
+  /* charts grid */
+  .charts{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:1.6rem;
+    margin-bottom:2.4rem;
+  }
+  @media(max-width:960px){.charts{grid-template-columns:1fr}}
+
+  .chart-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:1.5rem 1.6rem 1.2rem;
+    position:relative;
+    overflow:hidden;
+  }
+  .chart-card::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:linear-gradient(90deg,var(--p50),var(--p85),var(--p95));
+    opacity:.6;
+  }
+  .chart-card h2{
+    font-family:'Instrument Serif',serif;
+    font-weight:400;
+    font-size:1.35rem;
+    margin-bottom:.15rem;
+    color:#fff;
+  }
+  .chart-card .chart-sub{
+    font-size:.75rem;color:var(--text2);margin-bottom:1.1rem;font-weight:300;
+  }
+
+  /* canvas wrapper */
+  .canvas-wrap{position:relative;width:100%;height:340px}
+  .canvas-wrap canvas{width:100%;height:100%}
+
+  /* percentile cards */
+  .percentile-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:1.6rem;
+    margin-bottom:2.4rem;
+  }
+  @media(max-width:960px){.percentile-row{grid-template-columns:1fr}}
+  .pct-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:1.3rem 1.6rem;
+  }
+  .pct-card h3{
+    font-size:.8rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);
+    margin-bottom:.9rem;font-weight:500;
+  }
+  .pct-values{display:flex;gap:1.4rem;flex-wrap:wrap}
+  .pct-box{
+    flex:1;min-width:100px;
+    background:var(--surface2);
+    border-radius:10px;
+    padding:1rem 1.1rem;
+    text-align:center;
+  }
+  .pct-box .label{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:.35rem}
+  .pct-box .value{
+    font-family:'Instrument Serif',serif;
+    font-size:2rem;
+    color:#fff;
+  }
+  .pct-box .unit{font-size:.72rem;color:var(--text2);margin-top:.1rem}
+  .pct-box.p50{border-top:3px solid var(--p50)}
+  .pct-box.p85{border-top:3px solid var(--p85)}
+  .pct-box.p95{border-top:3px solid var(--p95)}
+
+  /* table */
+  .table-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:1.4rem 1.6rem;
+    overflow-x:auto;
+  }
+  .table-card h3{
+    font-family:'Instrument Serif',serif;
+    font-weight:400;font-size:1.2rem;color:#fff;margin-bottom:1rem;
+  }
+  table{width:100%;border-collapse:collapse;font-size:.78rem}
+  th{
+    text-align:left;padding:.55rem .6rem;
+    font-weight:500;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--text2);font-size:.68rem;
+    border-bottom:1px solid var(--border);
+  }
+  td{
+    padding:.55rem .6rem;
+    border-bottom:1px solid rgba(38,43,56,.5);
+    color:var(--text);
+  }
+  tr:last-child td{border-bottom:none}
+  .size-pill{
+    display:inline-block;padding:.15rem .55rem;border-radius:100px;
+    font-size:.68rem;font-weight:500;
+  }
+
+  /* tooltip */
+  #tooltip{
+    position:fixed;pointer-events:none;
+    background:rgba(20,23,30,.96);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:.7rem .9rem;
+    font-size:.75rem;
+    line-height:1.5;
+    color:var(--text);
+    max-width:320px;
+    z-index:999;
+    opacity:0;
+    transition:opacity .15s;
+    backdrop-filter:blur(6px);
+  }
+  #tooltip.show{opacity:1}
+  #tooltip strong{color:#fff;font-weight:500}
+
+  .note{
+    font-size:.72rem;color:var(--text2);margin-top:1.6rem;text-align:center;font-style:italic;font-weight:300;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Astra</h1>
+  <span class="badge">Flow Metrics</span>
+</header>
+<p class="subtitle">Lead Time &amp; Cycle Time scatter analysis · 19 work items · Oct 2025 – May 2026</p>
+
+<div class="legend-bar">
+  <span class="group-title">Duration size:</span>
+  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-small)"></span>Small (≤ 14 d)</span>
+  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-medium)"></span>Medium (15–30 d)</span>
+  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-large)"></span>Large (31–100 d)</span>
+  <span class="legend-item"><span class="legend-dot" style="background:var(--clr-xlarge)"></span>X-Large (> 100 d)</span>
+  <span style="flex:1"></span>
+  <span class="legend-item"><span style="width:2px;height:14px;background:var(--p50);display:inline-block;border-radius:1px"></span>P50</span>
+  <span class="legend-item"><span style="width:2px;height:14px;background:var(--p85);display:inline-block;border-radius:1px"></span>P85</span>
+  <span class="legend-item"><span style="width:2px;height:14px;background:var(--p95);display:inline-block;border-radius:1px"></span>P95</span>
+</div>
+
+<div class="charts">
+  <div class="chart-card">
+    <h2>Lead Time</h2>
+    <p class="chart-sub">From creation to completion (days)</p>
+    <div class="canvas-wrap"><canvas id="leadChart"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <h2>Cycle Time</h2>
+    <p class="chart-sub">From start of work to completion (days)</p>
+    <div class="canvas-wrap"><canvas id="cycleChart"></canvas></div>
+  </div>
+</div>
+
+<div class="percentile-row">
+  <div class="pct-card">
+    <h3>Lead Time Percentiles</h3>
+    <div class="pct-values">
+      <div class="pct-box p50"><div class="label">50th</div><div class="value" id="lp50"></div><div class="unit">days</div></div>
+      <div class="pct-box p85"><div class="label">85th</div><div class="value" id="lp85"></div><div class="unit">days</div></div>
+      <div class="pct-box p95"><div class="label">95th</div><div class="value" id="lp95"></div><div class="unit">days</div></div>
+    </div>
+  </div>
+  <div class="pct-card">
+    <h3>Cycle Time Percentiles</h3>
+    <div class="pct-values">
+      <div class="pct-box p50"><div class="label">50th</div><div class="value" id="cp50"></div><div class="unit">days</div></div>
+      <div class="pct-box p85"><div class="label">85th</div><div class="value" id="cp85"></div><div class="unit">days</div></div>
+      <div class="pct-box p95"><div class="label">95th</div><div class="value" id="cp95"></div><div class="unit">days</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="table-card">
+  <h3>Work Items Detail</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Title</th><th>Created</th><th>Started</th><th>Closed</th><th>Lead (d)</th><th>Cycle (d)</th><th>Size</th></tr></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<p class="note">Note: Row 2140364 had a malformed Closed Date ("170/04/2026") — corrected to 2026-04-17. Size categories are based on lead time duration.</p>
+
+<div id="tooltip"></div>
+
+<script>
+const DATA = [
+  {id:2061938,title:"[Astra] Implement delta aggregation",created:"2025-10-15",started:"2026-04-22",closed:"2026-04-30",lead:197,cycle:8},
+  {id:2061939,title:"[Astra] Extend aggregations to other windows",created:"2025-10-15",started:"2026-04-13",closed:"2026-05-04",lead:201,cycle:21},
+  {id:2124509,title:"[Astra] Data ingestion into silver zone",created:"2025-11-26",started:"2026-02-26",closed:"2026-04-21",lead:146,cycle:54},
+  {id:2132057,title:"[Astra] Securing API: Only Permitted Access",created:"2025-11-27",started:"2026-04-29",closed:"2026-05-06",lead:160,cycle:7},
+  {id:2140364,title:"[Astra] Investigate Add-in solution re-usibility",created:"2025-11-30",started:"2026-03-27",closed:"2026-04-17",lead:138,cycle:21},
+  {id:2148795,title:"[Astra] Implement TSDB retention policy",created:"2025-12-02",started:"2026-04-10",closed:"2026-04-10",lead:129,cycle:0},
+  {id:2154965,title:"[Astra] Silver zone - historical data processing",created:"2025-12-09",started:"2026-02-12",closed:"2026-04-30",lead:142,cycle:77},
+  {id:2155825,title:"[Astra] Restructure tables (POC recommendations)",created:"2025-12-09",started:"2026-03-27",closed:"2026-04-10",lead:122,cycle:14},
+  {id:2196838,title:"[Astra] Deploy raw-to-silver pipeline",created:"2026-02-19",started:"2026-03-27",closed:"2026-04-07",lead:47,cycle:11},
+  {id:2197612,title:"[Astra] CICD pipeline for kafka2tsdb",created:"2026-02-20",started:"2026-04-14",closed:"2026-04-24",lead:63,cycle:10},
+  {id:2210335,title:"[Astra] Data pipelining with Orchestration API",created:"2026-03-09",started:"2026-03-19",closed:"2026-03-27",lead:18,cycle:8},
+  {id:2223324,title:"[Astra] Define and document access groups",created:"2026-03-17",started:"2026-04-01",closed:"2026-04-17",lead:31,cycle:16},
+  {id:2229021,title:"[Astra] Quick fix Kafka2store reprocessing",created:"2026-03-26",started:"2026-04-02",closed:"2026-04-07",lead:12,cycle:5},
+  {id:2231454,title:"[Astra] Integrating Orch API to raw2silver",created:"2026-04-01",started:"2026-04-10",closed:"2026-04-23",lead:22,cycle:13},
+  {id:2243025,title:"Confluent Cloud OAuth Migration",created:"2026-04-22",started:"2026-05-21",closed:"2026-05-25",lead:33,cycle:4},
+  {id:2243112,title:"[Astra] Create a Test TSDB instance",created:"2026-04-22",started:"2026-04-24",closed:"2026-05-07",lead:15,cycle:13},
+  {id:2244272,title:"[Astra] Daily Row Grouping in Parquet Write",created:"2026-04-24",started:"2026-04-30",closed:"2026-05-12",lead:18,cycle:12},
+  {id:2247763,title:"[Astra] API changes",created:"2026-04-30",started:"2026-05-05",closed:"2026-05-12",lead:12,cycle:7},
+  {id:2261512,title:"[Astra] Kafka Auth change astra-kafka2store",created:"2026-05-25",started:"2026-05-25",closed:"2026-05-26",lead:1,cycle:1}
+];
+
+const PERCENTILES = {
+  lead:{p50:47,p85:150.2,p95:197.4},
+  cycle:{p50:11,p85:21,p95:56.3}
+};
+
+function sizeCategory(days){
+  if(days<=14) return {label:'Small',color:'#3dd9a0'};
+  if(days<=30) return {label:'Medium',color:'#f0c142'};
+  if(days<=100) return {label:'Large',color:'#f06a5e'};
+  return {label:'X-Large',color:'#c06cf6'};
+}
+
+/* --- Percentile cards --- */
+document.getElementById('lp50').textContent=PERCENTILES.lead.p50;
+document.getElementById('lp85').textContent=PERCENTILES.lead.p85.toFixed(1);
+document.getElementById('lp95').textContent=PERCENTILES.lead.p95.toFixed(1);
+document.getElementById('cp50').textContent=PERCENTILES.cycle.p50;
+document.getElementById('cp85').textContent=PERCENTILES.cycle.p85.toFixed(1);
+document.getElementById('cp95').textContent=PERCENTILES.cycle.p95.toFixed(1);
+
+/* --- Table --- */
+const tbody=document.getElementById('tableBody');
+DATA.forEach(d=>{
+  const s=sizeCategory(d.lead);
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td>${d.id}</td><td>${d.title}</td><td>${d.created}</td><td>${d.started}</td><td>${d.closed}</td><td>${d.lead}</td><td>${d.cycle}</td><td><span class="size-pill" style="background:${s.color}22;color:${s.color}">${s.label}</span></td>`;
+  tbody.appendChild(tr);
+});
+
+/* --- Scatter Charts --- */
+const tooltip=document.getElementById('tooltip');
+
+function drawScatter(canvasId, dataKey, percentiles){
+  const canvas=document.getElementById(canvasId);
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const rect=canvas.parentElement.getBoundingClientRect();
+  canvas.width=rect.width*dpr;
+  canvas.height=rect.height*dpr;
+  ctx.scale(dpr,dpr);
+  const W=rect.width, H=rect.height;
+
+  const pad={top:20,right:30,bottom:42,left:50};
+  const pw=W-pad.left-pad.right;
+  const ph=H-pad.top-pad.bottom;
+
+  // sorted by closed date
+  const sorted=[...DATA].sort((a,b)=>new Date(a.closed)-new Date(b.closed));
+  const vals=sorted.map(d=>d[dataKey]);
+  const maxVal=Math.max(...vals)*1.12;
+  const dates=sorted.map(d=>new Date(d.closed));
+  const minDate=new Date(Math.min(...dates));
+  const maxDate=new Date(Math.max(...dates));
+  const dateRange=maxDate-minDate||1;
+
+  function xPos(date){return pad.left+((date-minDate)/dateRange)*pw}
+  function yPos(val){return pad.top+ph-(val/maxVal)*ph}
+
+  // grid
+  ctx.strokeStyle='#262b38';
+  ctx.lineWidth=.5;
+  const yTicks=5;
+  for(let i=0;i<=yTicks;i++){
+    const y=pad.top+(ph/yTicks)*i;
+    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(W-pad.right,y);ctx.stroke();
+    const v=Math.round(maxVal-(maxVal/yTicks)*i);
+    ctx.fillStyle='#8b90a0';ctx.font='11px DM Sans';ctx.textAlign='right';
+    ctx.fillText(v,pad.left-8,y+4);
+  }
+
+  // x labels
+  ctx.textAlign='center';
+  ctx.fillStyle='#8b90a0';ctx.font='11px DM Sans';
+  const months=new Set();
+  sorted.forEach(d=>{
+    const dt=new Date(d.closed);
+    const key=dt.getFullYear()+'-'+(dt.getMonth()+1);
+    if(!months.has(key)){
+      months.add(key);
+      const label=dt.toLocaleDateString('en',{month:'short',year:'2-digit'});
+      ctx.fillText(label,xPos(dt),H-pad.bottom+28);
+    }
+  });
+
+  // axis label
+  ctx.save();ctx.translate(14,pad.top+ph/2);ctx.rotate(-Math.PI/2);
+  ctx.fillStyle='#8b90a0';ctx.font='11px DM Sans';ctx.textAlign='center';
+  ctx.fillText('Days',0,0);ctx.restore();
+  ctx.fillStyle='#8b90a0';ctx.font='11px DM Sans';ctx.textAlign='center';
+  ctx.fillText('Closed Date',pad.left+pw/2,H-2);
+
+  // percentile lines
+  const pColors=['#3dd9a0','#f0c142','#f06a5e'];
+  const pLabels=['P50','P85','P95'];
+  const pVals=[percentiles.p50,percentiles.p85,percentiles.p95];
+  pVals.forEach((pv,i)=>{
+    if(pv>maxVal) return;
+    const y=yPos(pv);
+    ctx.setLineDash([6,4]);
+    ctx.strokeStyle=pColors[i];
+    ctx.lineWidth=1.4;
+    ctx.globalAlpha=.7;
+    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(W-pad.right,y);ctx.stroke();
+    ctx.globalAlpha=1;
+    ctx.setLineDash([]);
+    ctx.fillStyle=pColors[i];ctx.font='bold 10px DM Sans';ctx.textAlign='left';
+    ctx.fillText(pLabels[i]+' = '+pv.toFixed(pv%1?1:0)+' d',W-pad.right+4,y+3);
+  });
+
+  // dots
+  const dots=[];
+  sorted.forEach((d,i)=>{
+    const val=d[dataKey];
+    const s=sizeCategory(d.lead);
+    const cx=xPos(dates[i]);
+    const cy=yPos(val);
+    const r=val===0?4:Math.min(8,Math.max(5,val/maxVal*14));
+
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
+    ctx.fillStyle=s.color+'cc';ctx.fill();
+    ctx.strokeStyle=s.color;ctx.lineWidth=1.5;ctx.stroke();
+
+    dots.push({cx,cy,r:r+3,d,val});
+  });
+
+  // hover
+  canvas.addEventListener('mousemove',e=>{
+    const br=canvas.getBoundingClientRect();
+    const mx=(e.clientX-br.left);
+    const my=(e.clientY-br.top);
+    let hit=null;
+    for(const dot of dots){
+      if(Math.hypot(mx-dot.cx,my-dot.cy)<dot.r){hit=dot;break}
+    }
+    if(hit){
+      tooltip.classList.add('show');
+      tooltip.innerHTML=`<strong>${hit.d.title}</strong><br>ID: ${hit.d.id}<br>Created: ${hit.d.created} → Closed: ${hit.d.closed}<br><strong>${dataKey==='lead'?'Lead':'Cycle'} Time: ${hit.val} days</strong><br>Size: ${sizeCategory(hit.d.lead).label}`;
+      let tx=e.clientX+14, ty=e.clientY-10;
+      if(tx+320>window.innerWidth) tx=e.clientX-330;
+      tooltip.style.left=tx+'px';tooltip.style.top=ty+'px';
+    } else {
+      tooltip.classList.remove('show');
+    }
+  });
+  canvas.addEventListener('mouseleave',()=>tooltip.classList.remove('show'));
+}
+
+drawScatter('leadChart','lead',PERCENTILES.lead);
+drawScatter('cycleChart','cycle',PERCENTILES.cycle);
+
+window.addEventListener('resize',()=>{
+  drawScatter('leadChart','lead',PERCENTILES.lead);
+  drawScatter('cycleChart','cycle',PERCENTILES.cycle);
+});
+</script>
+</body>
+</html>
