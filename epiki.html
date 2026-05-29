@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monte Carlo Forecast – ASTRA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #e6edf3;
+  --dim: #7d8590; --accent: #58a6ff; --accent2: #3fb950; --accent3: #f78166;
+  --accent4: #d2a8ff; --muted: #21262d; --input-bg: #0d1117;
+  --display: 'Space Grotesk', sans-serif; --body: 'DM Sans', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--body); background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px 20px; }
+input[type="range"] { height: 4px; accent-color: var(--accent); width: 100%; cursor: pointer; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.header { margin-bottom: 28px; }
+.header-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.header-bar { width: 8px; height: 32px; background: var(--accent); border-radius: 4px; }
+.header h1 { font-family: var(--display); font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+.header-sub { color: var(--dim); font-family: var(--mono); font-size: 11px; margin-left: 18px; letter-spacing: 0.5px; }
+
+.controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.control-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+.slider-group { margin-bottom: 14px; }
+.slider-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.slider-label { font-size: 12px; color: var(--dim); font-family: var(--mono); text-transform: uppercase; letter-spacing: 1px; }
+.slider-value { font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--mono); }
+.info-box { font-size: 11px; color: var(--dim); font-family: var(--mono); background: var(--muted); border-radius: 6px; padding: 6px 10px; margin-top: 4px; }
+.info-box strong { color: var(--text); }
+.field-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); font-family: var(--mono); display: block; margin-bottom: 4px; }
+.text-input, .date-input {
+  background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 7px 10px; color: var(--text); font-family: var(--mono); font-size: 13px; width: 100%;
+}
+.throughput-stats { font-size: 10px; color: var(--dim); margin-top: 3px; font-family: var(--mono); }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mb-16 { margin-bottom: 16px; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
+.tab-btn {
+  font-family: var(--mono); font-size: 12px; padding: 10px 18px;
+  border: 1px solid var(--border); background: transparent; color: var(--dim);
+  border-radius: 8px; cursor: pointer; font-weight: 400; transition: all 0.2s;
+}
+.tab-btn.active-when { border-color: var(--accent); background: rgba(88,166,255,0.09); color: var(--accent); font-weight: 600; }
+.tab-btn.active-howmany { border-color: var(--accent2); background: rgba(63,185,80,0.09); color: var(--accent2); font-weight: 600; }
+.tab-btn.active-calendar { border-color: var(--accent3); background: rgba(247,129,102,0.09); color: var(--accent3); font-weight: 600; }
+.tab-btn.active-epics { border-color: var(--accent4); background: rgba(210,168,255,0.09); color: var(--accent4); font-weight: 600; }
+
+.stat-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; flex: 1; min-width: 200px; }
+.stat-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--dim); font-family: var(--mono); margin-bottom: 6px; }
+.stat-value { font-size: 28px; font-weight: 700; font-family: var(--display); line-height: 1.1; }
+.stat-sub { font-size: 12px; color: var(--dim); margin-top: 4px; font-family: var(--mono); }
+
+.chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.chart-card h3 { font-family: var(--display); font-size: 15px; margin-bottom: 4px; }
+.chart-sub { font-size: 11px; color: var(--dim); font-family: var(--mono); margin-bottom: 8px; }
+.histogram { display: flex; align-items: flex-end; gap: 1px; height: 120px; margin-top: 8px; }
+.hist-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.hist-bar { width: 100%; border-radius: 2px 2px 0 0; transition: height 0.3s; }
+.hist-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); font-family: var(--mono); margin-top: 4px; }
+
+.pct-card { margin-top: 16px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.pct-card h4 { font-family: var(--display); font-size: 13px; margin-bottom: 6px; }
+.pct-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.pct-item { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; text-align: center; min-width: 80px; }
+.pct-label { font-size: 10px; color: var(--dim); font-family: var(--mono); text-transform: uppercase; }
+.pct-value { font-size: 16px; font-weight: 700; font-family: var(--display); }
+
+.cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
+.cal-header h3 { font-family: var(--display); font-size: 15px; }
+.cal-header p { font-size: 11px; color: var(--dim); font-family: var(--mono); }
+.reset-btn, .action-btn {
+  font-family: var(--mono); font-size: 11px; padding: 6px 14px;
+  background: var(--muted); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--dim); cursor: pointer; transition: all 0.15s;
+}
+.reset-btn:hover, .action-btn:hover { color: var(--text); border-color: var(--dim); }
+.action-btn.add { border-color: var(--accent2); color: var(--accent2); }
+.action-btn.add:hover { background: rgba(63,185,80,0.12); }
+.action-btn.remove { border-color: var(--accent3); color: var(--accent3); font-size: 10px; padding: 3px 8px; }
+.action-btn.remove:hover { background: rgba(247,129,102,0.12); }
+
+.cal-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
+.cal-table th {
+  padding: 8px 6px; text-align: left; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 1px; font-size: 10px;
+  border-bottom: 2px solid var(--border);
+}
+.cal-table th.center { text-align: center; }
+.cal-table td { padding: 6px; border-bottom: 1px solid var(--border); }
+.cal-table td.center { text-align: center; }
+.cal-table tr.low-eff { background: rgba(255,140,0,0.06); }
+.cal-input {
+  width: 52px; text-align: center; background: var(--input-bg);
+  border: 1px solid var(--border); border-radius: 4px; padding: 3px 4px;
+  color: var(--text); font-family: var(--mono); font-size: 12px;
+}
+.cal-input.wide { width: 140px; text-align: left; }
+.eff-high { font-weight: 600; color: #27ae60; }
+.eff-mid { font-weight: 600; color: #f39c12; }
+.eff-low { font-weight: 600; color: #e74c3c; }
+
+.footer {
+  margin-top: 28px; padding: 14px 0; border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10px; color: var(--dim); font-family: var(--mono); flex-wrap: wrap; gap: 8px;
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Epic-specific */
+.epic-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
+.epic-table th {
+  padding: 8px 6px; text-align: left; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 1px; font-size: 10px;
+  border-bottom: 2px solid var(--border);
+}
+.epic-table th.center { text-align: center; }
+.epic-table td { padding: 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.epic-table td.center { text-align: center; }
+.epic-input { width: 48px; text-align: center; background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; padding: 3px 4px; color: var(--text); font-family: var(--mono); font-size: 12px; }
+.epic-input.name { width: 160px; text-align: left; }
+.epic-result-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 16px; }
+.epic-result-card { background: var(--muted); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.epic-result-card .epic-name { font-family: var(--display); font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.epic-result-card .epic-detail { font-size: 11px; font-family: var(--mono); color: var(--dim); margin-bottom: 3px; }
+.epic-result-card .epic-date { font-size: 20px; font-weight: 700; font-family: var(--display); }
+.risk-green { color: var(--accent2); }
+.risk-yellow { color: #f0c040; }
+.risk-red { color: var(--accent3); }
+
+.section-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+@media (max-width: 768px) {
+  .controls-grid { grid-template-columns: 1fr; }
+  .stat-row { flex-direction: column; }
+  .epic-result-row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-row">
+    <div class="header-bar"></div>
+    <h1>Monte Carlo Forecast</h1>
+  </div>
+  <p class="header-sub" id="headerSub">ASTRA · 10 000 symulacji</p>
+</div>
+
+<!-- ═══════ GLOBAL CONTROLS ═══════ -->
+<div class="controls-grid">
+  <div class="control-panel">
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-label">Elementy w backlogu</span>
+        <span class="slider-value" id="backlogVal">30</span>
+      </div>
+      <input type="range" id="backlogSlider" min="1" max="200" value="30">
+    </div>
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-label">% backlogu do prognozy</span>
+        <span class="slider-value" id="backlogPctVal">100%</span>
+      </div>
+      <input type="range" id="backlogPctSlider" min="10" max="100" value="100">
+    </div>
+    <div class="info-box">Prognozowane elementy: <strong id="effectiveBacklogDisp">30</strong> z <span id="totalBacklogDisp">30</span></div>
+  </div>
+  <div class="control-panel">
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-label">Prawdopodobieństwo prognozy</span>
+        <span class="slider-value" id="probVal">85%</span>
+      </div>
+      <input type="range" id="probSlider" min="50" max="99" value="85">
+    </div>
+    <div>
+      <label class="field-label">Przepustowość historyczna (items/sprint)</label>
+      <input type="text" class="text-input" id="throughputInput" value="3, 6, 6, 2, 2">
+      <div class="throughput-stats" id="throughputStats"></div>
+    </div>
+    <div class="mt-12">
+      <label class="field-label">Data docelowa (dla "Ile zrobimy?")</label>
+      <input type="date" class="date-input" id="targetDateInput">
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ TABS ═══════ -->
+<div class="tabs">
+  <button class="tab-btn active-when" id="tabWhen" onclick="switchTab('when')">📅 Kiedy skończymy?</button>
+  <button class="tab-btn" id="tabHowmany" onclick="switchTab('howmany')">📊 Ile zrobimy?</button>
+  <button class="tab-btn" id="tabCalendar" onclick="switchTab('calendar')">🗓️ Kalendarz sprintów</button>
+  <button class="tab-btn" id="tabEpics" onclick="switchTab('epics')">🏔️ Epiki</button>
+</div>
+
+<!-- ═══════ TAB: WHEN ═══════ -->
+<div class="tab-content active" id="panelWhen">
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-title" id="whenTitle1">🎯 100% BACKLOGU @ P85</div><div class="stat-value" style="color:var(--accent)" id="whenVal1">–</div><div class="stat-sub" id="whenSub1"></div></div>
+    <div class="stat-card"><div class="stat-title">📌 85% BACKLOGU @ P85</div><div class="stat-value" style="color:var(--accent2)" id="whenVal2">–</div><div class="stat-sub" id="whenSub2"></div></div>
+    <div class="stat-card"><div class="stat-title">⚡ NAJLEPSZY SCENARIUSZ</div><div class="stat-value" style="color:var(--accent3)" id="whenVal3">–</div><div class="stat-sub" id="whenSub3"></div></div>
+  </div>
+  <div class="chart-card">
+    <h3 id="whenChartTitle">Rozkład wyników</h3>
+    <p class="chart-sub" id="whenChartSub"></p>
+    <div class="histogram" id="whenHistogram"></div>
+    <div class="hist-axis"><span id="whenAxisMin"></span><span id="whenAxisMax"></span></div>
+  </div>
+  <div class="pct-card"><h4>Percentyle – daty ukończenia</h4><div class="pct-row" id="whenPercentiles"></div></div>
+</div>
+
+<!-- ═══════ TAB: HOW MANY ═══════ -->
+<div class="tab-content" id="panelHowmany">
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-title" id="hmTitle1">📊 UKOŃCZYMY @ P85</div><div class="stat-value" style="color:var(--accent2)" id="hmVal1">–</div><div class="stat-sub" id="hmSub1"></div></div>
+    <div class="stat-card"><div class="stat-title">✅ MEDIANA (P50)</div><div class="stat-value" style="color:var(--accent)" id="hmVal2">–</div><div class="stat-sub">50% szans na tyle lub więcej</div></div>
+    <div class="stat-card"><div class="stat-title">🛡️ BEZPIECZNA EST. (P95)</div><div class="stat-value" style="color:var(--accent3)" id="hmVal3">–</div><div class="stat-sub">95% szans</div></div>
+  </div>
+  <div class="chart-card">
+    <h3 id="hmChartTitle">Rozkład</h3>
+    <p class="chart-sub" id="hmChartSub"></p>
+    <div class="histogram" id="hmHistogram"></div>
+    <div class="hist-axis"><span id="hmAxisMin"></span><span id="hmAxisMax"></span></div>
+  </div>
+  <div class="pct-card"><h4>Percentyle – liczba ukończonych elementów</h4><div class="pct-row" id="hmPercentiles"></div></div>
+</div>
+
+<!-- ═══════ TAB: CALENDAR ═══════ -->
+<div class="tab-content" id="panelCalendar">
+  <div class="chart-card">
+    <div class="cal-header">
+      <div><h3>Kalendarz sprintów</h3><p>Dostosuj capacity i focus – symulacja aktualizuje się automatycznie</p></div>
+      <button class="reset-btn" onclick="resetCalendar()">Reset all → 100%</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="cal-table"><thead><tr>
+        <th>Sprint</th><th>Daty</th><th class="center">Capacity %</th><th class="center">Focus %</th><th class="center">Efekt</th>
+      </tr></thead><tbody id="calendarBody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ TAB: EPICS ═══════ -->
+<div class="tab-content" id="panelEpics">
+
+  <!-- Epic Controls -->
+  <div class="controls-grid mb-16">
+    <div class="control-panel">
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Prawdopodobieństwo (epiki)</span>
+          <span class="slider-value" id="epicProbVal">85%</span>
+        </div>
+        <input type="range" id="epicProbSlider" min="50" max="99" value="85">
+      </div>
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Focus na projekcie (%)</span>
+          <span class="slider-value" id="epicFocusVal">75%</span>
+        </div>
+        <input type="range" id="epicFocusSlider" min="10" max="100" value="75">
+      </div>
+      <div class="mt-12">
+        <label class="field-label">Przepustowość historyczna epików (stories/sprint)</label>
+        <input type="text" class="text-input" id="epicTpInput" value="3, 4, 5, 4, 2, 7, 4, 5">
+        <div class="throughput-stats" id="epicTpStats"></div>
+      </div>
+    </div>
+    <div class="control-panel">
+      <div>
+        <label class="field-label">Data początkowa</label>
+        <input type="date" class="date-input" id="epicStartDate" value="2026-06-01">
+      </div>
+      <div class="mt-12">
+        <label class="field-label">Data docelowa</label>
+        <input type="date" class="date-input" id="epicTargetDate" value="2026-09-30">
+      </div>
+      <div class="info-box mt-12" id="epicInfoBox">
+        Sprint: 2-tygodniowy · Lipiec: domyślnie obniżona capacity
+      </div>
+    </div>
+  </div>
+
+  <!-- Epic Sprint Calendar -->
+  <div class="chart-card mb-16">
+    <div class="cal-header">
+      <div><h3>Kalendarz sprintów – Epiki</h3><p>Lipiec ma domyślnie 60% capacity (urlopy). Edytuj dowolnie.</p></div>
+      <button class="reset-btn" onclick="resetEpicCal()">Reset defaults</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="cal-table"><thead><tr>
+        <th>Sprint</th><th>Daty</th><th class="center">Capacity %</th><th class="center">Efekt</th>
+      </tr></thead><tbody id="epicCalBody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- Epic List -->
+  <div class="chart-card mb-16">
+    <div class="cal-header">
+      <div><h3>Lista Epików</h3><p>Podaj min/max liczbę User Stories – symulacja losuje z tego zakresu</p></div>
+      <button class="action-btn add" onclick="addEpic()">+ Dodaj epik</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="epic-table"><thead><tr>
+        <th>Epik</th><th>Nazwa</th><th class="center">Min US</th><th class="center">Max US</th><th class="center">Estymata (śr.)</th><th class="center"></th>
+      </tr></thead><tbody id="epicListBody"></tbody></table>
+    </div>
+    <div class="info-box mt-12" id="epicTotalInfo"></div>
+  </div>
+
+  <!-- Epic Stats -->
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-title" id="epicStatTitle1">🏔️ WSZYSTKIE EPIKI</div><div class="stat-value" style="color:var(--accent4)" id="epicStatVal1">–</div><div class="stat-sub" id="epicStatSub1"></div></div>
+    <div class="stat-card"><div class="stat-title" id="epicStatTitle2">📊 ILE DO TERMINU</div><div class="stat-value" style="color:var(--accent2)" id="epicStatVal2">–</div><div class="stat-sub" id="epicStatSub2"></div></div>
+    <div class="stat-card"><div class="stat-title">⚡ NAJLEPSZY SCENARIUSZ</div><div class="stat-value" style="color:var(--accent3)" id="epicStatVal3">–</div><div class="stat-sub" id="epicStatSub3"></div></div>
+  </div>
+
+  <!-- Epic Histogram -->
+  <div class="chart-card">
+    <h3 id="epicChartTitle">Rozkład – dni do ukończenia wszystkich epików</h3>
+    <p class="chart-sub" id="epicChartSub"></p>
+    <div class="histogram" id="epicHistogram"></div>
+    <div class="hist-axis"><span id="epicAxisMin"></span><span id="epicAxisMax"></span></div>
+  </div>
+  <div class="pct-card"><h4>Percentyle – daty ukończenia epików</h4><div class="pct-row" id="epicPercentiles"></div></div>
+
+  <hr class="section-divider">
+
+  <!-- Per-epic results -->
+  <div class="chart-card">
+    <h3>Prognoza per Epik</h3>
+    <p class="chart-sub">Przewidywana data ukończenia każdego epiku sekwencyjnie</p>
+    <div class="epic-result-row" id="epicResults"></div>
+  </div>
+</div>
+
+<!-- ═══════ FOOTER ═══════ -->
+<div class="footer">
+  <span id="footerLeft">Monte Carlo · 10 000 symulacji · Sprinty 2-tygodniowe · Dane: Astra</span>
+  <span id="footerRight"></span>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   GLOBAL STATE
+   ═══════════════════════════════════════════════ */
+const NUM_SIMS = 10000;
+let backlogSize = 30, backlogPercent = 100, probability = 85;
+let throughput = [3, 6, 6, 2, 2];
+let activeTab = 'when';
+const startDate = new Date();
+let targetDate = new Date(); targetDate.setMonth(targetDate.getMonth() + 4);
+
+// Main calendar: 30 sprints from today
+let sprintCalendar = [];
+(function() {
+  const s = new Date();
+  for (let i = 0; i < 30; i++) {
+    const st = new Date(s); st.setDate(st.getDate() + i * 14);
+    const en = new Date(st); en.setDate(en.getDate() + 13);
+    sprintCalendar.push({ start: st, end: en, capacity: 100, focus: 100 });
+  }
+})();
+
+/* ═══════ EPIC STATE ═══════ */
+let epicProb = 85;
+let epicFocus = 75;
+let epicTp = [3, 4, 5, 4, 2, 7, 4, 5];
+let epicStartDate = new Date('2026-06-01T00:00:00');
+let epicTargetDate = new Date('2026-09-30T00:00:00');
+
+let epics = [
+  { name: 'Epik 1', min: 5, max: 8 },
+  { name: 'Epik 2', min: 4, max: 7 },
+  { name: 'Epik 3', min: 6, max: 10 },
+  { name: 'Epik 4', min: 3, max: 6 },
+  { name: 'Epik 5', min: 5, max: 9 },
+  { name: 'Epik 6', min: 4, max: 8 },
+];
+
+// Epic sprint calendar: built from epicStartDate to epicTargetDate + buffer
+let epicCalendar = [];
+function buildEpicCalendar() {
+  epicCalendar = [];
+  const s = new Date(epicStartDate);
+  // build enough sprints to cover target + 50% buffer
+  const daySpan = Math.max(14, Math.ceil((epicTargetDate - epicStartDate) / 864e5));
+  const numSprints = Math.ceil(daySpan * 1.5 / 14);
+  for (let i = 0; i < numSprints; i++) {
+    const st = new Date(s); st.setDate(st.getDate() + i * 14);
+    const en = new Date(st); en.setDate(en.getDate() + 13);
+    // Default capacity: July gets 60%
+    let cap = 100;
+    if (st.getMonth() === 6 || en.getMonth() === 6) cap = 60; // July=6
+    epicCalendar.push({ start: st, end: en, capacity: cap });
+  }
+}
+buildEpicCalendar();
+
+/* ═══════════════════════════════════════════════
+   MC ENGINE
+   ═══════════════════════════════════════════════ */
+function runMCWhen(bSize, tp, n, cal, sd) {
+  const r = [];
+  for (let s = 0; s < n; s++) {
+    let rem = bSize, si = 0, td = 0;
+    while (rem > 0 && si < 200) {
+      const c = cal[si] || { capacity: 100, focus: 100 };
+      const base = tp[Math.floor(Math.random() * tp.length)];
+      const capMult = (c.capacity !== undefined ? c.capacity : 100) / 100;
+      const focMult = (c.focus !== undefined ? c.focus : 100) / 100;
+      rem -= Math.max(1, Math.round(base * capMult * focMult));
+      td += 14; si++;
+    }
+    const ed = new Date(sd); ed.setDate(ed.getDate() + td);
+    r.push({ sprints: si, days: td, endDate: ed });
+  }
+  r.sort((a, b) => a.days - b.days);
+  return r;
+}
+
+function runMCHowMany(tDate, tp, n, cal, sd) {
+  const totalSp = Math.floor(Math.max(0, Math.ceil((tDate - sd) / 864e5)) / 14);
+  const r = [];
+  for (let s = 0; s < n; s++) {
+    let done = 0;
+    for (let sp = 0; sp < totalSp; sp++) {
+      const c = cal[sp] || { capacity: 100, focus: 100 };
+      const capMult = (c.capacity !== undefined ? c.capacity : 100) / 100;
+      const focMult = (c.focus !== undefined ? c.focus : 100) / 100;
+      done += Math.max(0, Math.round(tp[Math.floor(Math.random() * tp.length)] * capMult * focMult));
+    }
+    r.push(done);
+  }
+  r.sort((a, b) => a - b);
+  return r;
+}
+
+/* MC for epics: sequential delivery, stories sampled from [min, max] */
+function runMCEpics(epicList, tp, n, cal, sd, focusPct) {
+  // For each simulation: sample story count per epic, then deliver sequentially
+  const allResults = []; // {totalDays, totalSprints, endDate, perEpic: [{days, sprints, endDate}]}
+  for (let s = 0; s < n; s++) {
+    let spIdx = 0, totalDays = 0;
+    const perEpic = [];
+    for (let e = 0; e < epicList.length; e++) {
+      const ep = epicList[e];
+      const stories = ep.min + Math.floor(Math.random() * (ep.max - ep.min + 1));
+      let rem = stories;
+      while (rem > 0 && spIdx < 200) {
+        const c = cal[spIdx] || { capacity: 100 };
+        const base = tp[Math.floor(Math.random() * tp.length)];
+        const adj = Math.max(1, Math.round(base * (c.capacity / 100) * (focusPct / 100)));
+        rem -= adj;
+        totalDays += 14; spIdx++;
+      }
+      const ed = new Date(sd); ed.setDate(ed.getDate() + totalDays);
+      perEpic.push({ days: totalDays, sprints: spIdx, endDate: new Date(ed), stories });
+    }
+    allResults.push({ totalDays, totalSprints: spIdx, endDate: new Date(perEpic[perEpic.length - 1].endDate), perEpic });
+  }
+  allResults.sort((a, b) => a.totalDays - b.totalDays);
+  return allResults;
+}
+
+/* MC: how many stories by target date for epics */
+function runMCEpicHowMany(tDate, tp, n, cal, sd, focusPct) {
+  const totalSp = Math.floor(Math.max(0, Math.ceil((tDate - sd) / 864e5)) / 14);
+  const r = [];
+  for (let s = 0; s < n; s++) {
+    let done = 0;
+    for (let sp = 0; sp < totalSp; sp++) {
+      const c = cal[sp] || { capacity: 100 };
+      const base = tp[Math.floor(Math.random() * tp.length)];
+      done += Math.max(0, Math.round(base * (c.capacity / 100) * (focusPct / 100)));
+    }
+    r.push(done);
+  }
+  r.sort((a, b) => a - b);
+  return r;
+}
+
+function pct(sorted, p) { return sorted[Math.max(0, Math.ceil((p / 100) * sorted.length) - 1)]; }
+function hist(vals, buckets) {
+  buckets = buckets || 25;
+  const mn = vals[0], mx = vals[vals.length - 1], rng = mx - mn || 1, step = rng / buckets;
+  const bins = [];
+  for (let i = 0; i < buckets; i++) bins.push({ min: mn + i * step, max: mn + (i + 1) * step, count: 0 });
+  vals.forEach(v => { bins[Math.min(Math.floor((v - mn) / step), buckets - 1)].count++; });
+  return bins;
+}
+
+function fmtDate(d) { return d instanceof Date ? d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : d; }
+function fmtISO(d) { return d.toISOString().split('T')[0]; }
+function effBacklog() { return Math.ceil(backlogSize * (backlogPercent / 100)); }
+
+function renderHist(id, data, hlVal, color) {
+  const el = document.getElementById(id); if (!el) return;
+  const mx = Math.max(...data.map(b => b.count));
+  let h = '';
+  data.forEach(bin => {
+    const ht = mx > 0 ? (bin.count / mx) * 100 : 0;
+    const hl = hlVal !== undefined && (bin.min + bin.max) / 2 <= hlVal;
+    const bg = hl ? color : 'var(--muted)';
+    const mh = bin.count > 0 ? 'min-height:2px;' : '';
+    h += '<div class="hist-bar-wrap"><div class="hist-bar" style="height:' + ht + '%;' + mh + 'background:' + bg + '"></div></div>';
+  });
+  el.innerHTML = h;
+}
+
+function renderPcts(id, ps, color) {
+  const el = document.getElementById(id); if (!el) return;
+  let h = '';
+  [50, 70, 85, 95].forEach(p => {
+    h += '<div class="pct-item"><div class="pct-label">P' + p + '</div><div class="pct-value" style="color:' + color + '">' + ps[p] + '</div></div>';
+  });
+  el.innerHTML = h;
+}
+
+function tpStats(tp) {
+  const avg = (tp.reduce((a, b) => a + b, 0) / tp.length).toFixed(1);
+  return 'Średnia: ' + avg + ' · Min: ' + Math.min(...tp) + ' · Max: ' + Math.max(...tp) + ' · Próbek: ' + tp.length;
+}
+
+/* ═══════════════════════════════════════════════
+   CALENDARS
+   ═══════════════════════════════════════════════ */
+function renderCalendar() {
+  const tbody = document.getElementById('calendarBody');
+  let h = '';
+  sprintCalendar.forEach((sp, i) => {
+    const eff = Math.round((sp.capacity / 100) * (sp.focus / 100) * 100);
+    const cls = eff < 70 ? ' class="low-eff"' : '';
+    const ec = eff < 50 ? 'eff-low' : eff < 80 ? 'eff-mid' : 'eff-high';
+    h += '<tr' + cls + '><td>S' + (i + 1) + '</td><td style="color:var(--dim)">' + fmtDate(sp.start) + ' – ' + fmtDate(sp.end) + '</td>' +
+      '<td class="center"><input class="cal-input" type="number" min="0" max="100" value="' + sp.capacity + '" onchange="updSprint(' + i + ',\'capacity\',this.value)"></td>' +
+      '<td class="center"><input class="cal-input" type="number" min="0" max="100" value="' + sp.focus + '" onchange="updSprint(' + i + ',\'focus\',this.value)"></td>' +
+      '<td class="center ' + ec + '">' + eff + '%</td></tr>';
+  });
+  tbody.innerHTML = h;
+}
+function updSprint(i, f, v) { sprintCalendar[i][f] = Math.max(0, Math.min(100, parseInt(v) || 0)); renderCalendar(); run(); }
+function resetCalendar() { sprintCalendar.forEach(sp => { sp.capacity = 100; sp.focus = 100; }); renderCalendar(); run(); }
+
+function renderEpicCal() {
+  const tbody = document.getElementById('epicCalBody');
+  let h = '';
+  epicCalendar.forEach((sp, i) => {
+    const eff = Math.round((sp.capacity / 100) * (epicFocus / 100) * 100);
+    const cls = eff < 70 ? ' class="low-eff"' : '';
+    const ec = eff < 50 ? 'eff-low' : eff < 80 ? 'eff-mid' : 'eff-high';
+    h += '<tr' + cls + '><td>S' + (i + 1) + '</td><td style="color:var(--dim)">' + fmtDate(sp.start) + ' – ' + fmtDate(sp.end) + '</td>' +
+      '<td class="center"><input class="cal-input" type="number" min="0" max="100" value="' + sp.capacity + '" onchange="updEpicSprint(' + i + ',this.value)"></td>' +
+      '<td class="center ' + ec + '">' + eff + '%</td></tr>';
+  });
+  tbody.innerHTML = h;
+}
+function updEpicSprint(i, v) { epicCalendar[i].capacity = Math.max(0, Math.min(100, parseInt(v) || 0)); renderEpicCal(); runEpics(); }
+function resetEpicCal() { buildEpicCalendar(); renderEpicCal(); runEpics(); }
+
+/* ═══════════════════════════════════════════════
+   EPIC LIST
+   ═══════════════════════════════════════════════ */
+function renderEpicList() {
+  const tbody = document.getElementById('epicListBody');
+  let h = '';
+  epics.forEach((ep, i) => {
+    const avg = ((ep.min + ep.max) / 2).toFixed(1);
+    h += '<tr><td>E' + (i + 1) + '</td>' +
+      '<td><input class="cal-input wide" type="text" value="' + ep.name + '" onchange="updEpic(' + i + ',\'name\',this.value)"></td>' +
+      '<td class="center"><input class="epic-input" type="number" min="1" max="99" value="' + ep.min + '" onchange="updEpic(' + i + ',\'min\',this.value)"></td>' +
+      '<td class="center"><input class="epic-input" type="number" min="1" max="99" value="' + ep.max + '" onchange="updEpic(' + i + ',\'max\',this.value)"></td>' +
+      '<td class="center" style="color:var(--dim)">' + avg + ' US</td>' +
+      '<td class="center"><button class="action-btn remove" onclick="removeEpic(' + i + ')">✕</button></td></tr>';
+  });
+  tbody.innerHTML = h;
+  const totalMin = epics.reduce((s, e) => s + e.min, 0);
+  const totalMax = epics.reduce((s, e) => s + e.max, 0);
+  const totalAvg = ((totalMin + totalMax) / 2).toFixed(0);
+  document.getElementById('epicTotalInfo').innerHTML =
+    'Łącznie: <strong>' + epics.length + '</strong> epików · <strong>' + totalMin + '–' + totalMax + '</strong> User Stories (średnio ~' + totalAvg + ')';
+}
+function updEpic(i, f, v) {
+  if (f === 'name') { epics[i].name = v; }
+  else {
+    v = Math.max(1, parseInt(v) || 1);
+    epics[i][f] = v;
+    if (epics[i].min > epics[i].max) epics[i].max = epics[i].min;
+  }
+  renderEpicList(); runEpics();
+}
+function addEpic() {
+  epics.push({ name: 'Epik ' + (epics.length + 1), min: 4, max: 8 });
+  renderEpicList(); runEpics();
+}
+function removeEpic(i) {
+  if (epics.length <= 1) return;
+  epics.splice(i, 1);
+  renderEpicList(); runEpics();
+}
+
+/* ═══════════════════════════════════════════════
+   TABS
+   ═══════════════════════════════════════════════ */
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.className = 'tab-btn');
+  const map = {
+    when: ['panelWhen', 'tabWhen', 'active-when'],
+    howmany: ['panelHowmany', 'tabHowmany', 'active-howmany'],
+    calendar: ['panelCalendar', 'tabCalendar', 'active-calendar'],
+    epics: ['panelEpics', 'tabEpics', 'active-epics']
+  };
+  const m = map[tab];
+  document.getElementById(m[0]).classList.add('active');
+  document.getElementById(m[1]).className = 'tab-btn ' + m[2];
+}
+
+/* ═══════════════════════════════════════════════
+   RUN: MAIN TABS
+   ═══════════════════════════════════════════════ */
+function run() {
+  const eff = effBacklog();
+  document.getElementById('backlogVal').textContent = backlogSize;
+  document.getElementById('backlogPctVal').textContent = backlogPercent + '%';
+  document.getElementById('probVal').textContent = probability + '%';
+  document.getElementById('effectiveBacklogDisp').textContent = eff;
+  document.getElementById('totalBacklogDisp').textContent = backlogSize;
+  document.getElementById('throughputStats').textContent = tpStats(throughput);
+  document.getElementById('headerSub').textContent = 'ASTRA · ' + NUM_SIMS.toLocaleString() + ' symulacji';
+
+  const wr = runMCWhen(eff, throughput, NUM_SIMS, sprintCalendar, startDate);
+  const wp = pct(wr, probability);
+  const items85 = Math.ceil(backlogSize * 0.85);
+  const w85 = runMCWhen(items85, throughput, NUM_SIMS, sprintCalendar, startDate);
+  const wp85 = pct(w85, 85);
+
+  document.getElementById('whenTitle1').textContent = '🎯 ' + backlogPercent + '% BACKLOGU @ P' + probability;
+  document.getElementById('whenVal1').textContent = fmtDate(wp.endDate);
+  document.getElementById('whenSub1').textContent = wp.sprints + ' sprintów';
+  document.getElementById('whenVal2').textContent = fmtDate(wp85.endDate);
+  document.getElementById('whenSub2').textContent = items85 + ' elementów';
+  document.getElementById('whenVal3').textContent = fmtDate(wr[0].endDate);
+  document.getElementById('whenSub3').textContent = wr[0].sprints + ' sprintów (P1)';
+  document.getElementById('whenChartTitle').textContent = 'Rozkład wyników – dni do ukończenia ' + eff + ' elementów';
+  document.getElementById('whenChartSub').textContent = 'Podświetlenie: P' + probability + ' = ' + wp.days + ' dni';
+  renderHist('whenHistogram', hist(wr.map(r => r.days), 25), wp.days, 'var(--accent)');
+  document.getElementById('whenAxisMin').textContent = wr[0].days + 'd';
+  document.getElementById('whenAxisMax').textContent = wr[wr.length - 1].days + 'd';
+  const wPcts = {}; [50, 70, 85, 95].forEach(p => { wPcts[p] = fmtDate(pct(wr, p).endDate); });
+  renderPcts('whenPercentiles', wPcts, 'var(--accent)');
+
+  const hr = runMCHowMany(targetDate, throughput, NUM_SIMS, sprintCalendar, startDate);
+  const hp = pct(hr, probability);
+  document.getElementById('hmTitle1').textContent = '📊 UKOŃCZYMY DO ' + fmtDate(targetDate) + ' @ P' + probability;
+  document.getElementById('hmVal1').textContent = hp + ' items';
+  document.getElementById('hmSub1').textContent = 'z ' + eff + ' w backlogu';
+  document.getElementById('hmVal2').textContent = pct(hr, 50) + ' items';
+  document.getElementById('hmVal3').textContent = pct(hr, 95) + ' items';
+  document.getElementById('hmChartTitle').textContent = 'Rozkład – ile elementów ukończymy do ' + fmtDate(targetDate);
+  document.getElementById('hmChartSub').textContent = 'Podświetlenie: P' + probability + ' = ' + hp + ' elementów';
+  renderHist('hmHistogram', hist(hr, 25), hp, 'var(--accent2)');
+  document.getElementById('hmAxisMin').textContent = hr[0];
+  document.getElementById('hmAxisMax').textContent = hr[hr.length - 1];
+  const hPcts = {}; [50, 70, 85, 95].forEach(p => { hPcts[p] = pct(hr, p); });
+  renderPcts('hmPercentiles', hPcts, 'var(--accent2)');
+  document.getElementById('footerRight').textContent = 'Backlog: ' + eff + ' el. · Throughput: ' + throughput.join(', ') + ' items/sprint';
+}
+
+/* ═══════════════════════════════════════════════
+   RUN: EPICS
+   ═══════════════════════════════════════════════ */
+function runEpics() {
+  document.getElementById('epicProbVal').textContent = epicProb + '%';
+  document.getElementById('epicFocusVal').textContent = epicFocus + '%';
+  document.getElementById('epicTpStats').textContent = tpStats(epicTp);
+
+  // All-epics WHEN
+  const er = runMCEpics(epics, epicTp, NUM_SIMS, epicCalendar, epicStartDate, epicFocus);
+  const ep = pct(er, epicProb);
+
+  const deadlineDate = epicTargetDate;
+  const isOnTime = ep.endDate <= deadlineDate;
+
+  document.getElementById('epicStatTitle1').textContent = '🏔️ WSZYSTKIE EPIKI @ P' + epicProb;
+  document.getElementById('epicStatVal1').textContent = fmtDate(ep.endDate);
+  document.getElementById('epicStatSub1').textContent = ep.totalSprints + ' sprintów · ' + (isOnTime ? '✅ w terminie' : '⚠️ po terminie (' + fmtDate(deadlineDate) + ')');
+
+  // How many stories by target
+  const hmEpic = runMCEpicHowMany(epicTargetDate, epicTp, NUM_SIMS, epicCalendar, epicStartDate, epicFocus);
+  const hmEpVal = pct(hmEpic, epicProb);
+  const totalAvgStories = Math.round(epics.reduce((s, e) => s + (e.min + e.max) / 2, 0));
+  document.getElementById('epicStatTitle2').textContent = '📊 STORIES DO ' + fmtDate(epicTargetDate) + ' @ P' + epicProb;
+  document.getElementById('epicStatVal2').textContent = hmEpVal + ' stories';
+  document.getElementById('epicStatSub2').textContent = 'potrzebnych ~' + totalAvgStories + ' (średnia est.)';
+
+  document.getElementById('epicStatVal3').textContent = fmtDate(er[0].endDate);
+  document.getElementById('epicStatSub3').textContent = er[0].totalSprints + ' sprintów (P1)';
+
+  // Histogram
+  const days = er.map(r => r.totalDays);
+  document.getElementById('epicChartTitle').textContent = 'Rozkład – dni do ukończenia ' + epics.length + ' epików';
+  document.getElementById('epicChartSub').textContent = 'Podświetlenie: P' + epicProb + ' = ' + ep.totalDays + ' dni';
+  renderHist('epicHistogram', hist(days, 25), ep.totalDays, 'var(--accent4)');
+  document.getElementById('epicAxisMin').textContent = er[0].totalDays + 'd';
+  document.getElementById('epicAxisMax').textContent = er[er.length - 1].totalDays + 'd';
+
+  const ePcts = {}; [50, 70, 85, 95].forEach(p => { ePcts[p] = fmtDate(pct(er, p).endDate); });
+  renderPcts('epicPercentiles', ePcts, 'var(--accent4)');
+
+  // Per-epic results (at chosen percentile)
+  const target = pct(er, epicProb);
+  const container = document.getElementById('epicResults');
+  let h = '';
+  const colors = ['var(--accent)', 'var(--accent2)', 'var(--accent3)', 'var(--accent4)', '#f0c040', '#58d1ff'];
+  // Gather per-epic dates from many simulations at the percentile index
+  const pctIdx = Math.max(0, Math.ceil((epicProb / 100) * NUM_SIMS) - 1);
+  // Sort by total, take the percentile simulation
+  const simAtPct = er[pctIdx];
+  epics.forEach((ep, i) => {
+    const pe = simAtPct.perEpic[i];
+    const isLate = pe.endDate > deadlineDate;
+    const riskClass = isLate ? 'risk-red' : (pe.endDate > new Date(deadlineDate.getTime() - 14 * 864e5) ? 'risk-yellow' : 'risk-green');
+    const col = colors[i % colors.length];
+    h += '<div class="epic-result-card">' +
+      '<div class="epic-name" style="color:' + col + '">' + ep.name + '</div>' +
+      '<div class="epic-detail">Stories: ' + ep.min + '–' + ep.max + ' (sim: ' + pe.stories + ')</div>' +
+      '<div class="epic-date ' + riskClass + '">' + fmtDate(pe.endDate) + '</div>' +
+      '<div class="epic-detail">' + pe.sprints + ' sprintów łącznie · ' + pe.days + ' dni od startu</div>' +
+      (isLate ? '<div class="epic-detail risk-red">⚠️ po deadline</div>' : '<div class="epic-detail risk-green">✅ w terminie</div>') +
+      '</div>';
+  });
+  container.innerHTML = h;
+}
+
+/* ═══════════════════════════════════════════════
+   EVENT BINDINGS
+   ═══════════════════════════════════════════════ */
+document.getElementById('backlogSlider').addEventListener('input', function() { backlogSize = +this.value; run(); });
+document.getElementById('backlogPctSlider').addEventListener('input', function() { backlogPercent = +this.value; run(); });
+document.getElementById('probSlider').addEventListener('input', function() { probability = +this.value; run(); });
+function parseTp() {
+  const p = document.getElementById('throughputInput').value.split(/[,;\s]+/).map(Number).filter(n => !isNaN(n) && n >= 0);
+  if (p.length > 0) { throughput = p; run(); }
+}
+document.getElementById('throughputInput').addEventListener('blur', parseTp);
+document.getElementById('throughputInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') parseTp(); });
+document.getElementById('targetDateInput').addEventListener('change', function() { targetDate = new Date(this.value + 'T00:00:00'); run(); });
+
+// Epic bindings
+document.getElementById('epicProbSlider').addEventListener('input', function() { epicProb = +this.value; runEpics(); });
+document.getElementById('epicFocusSlider').addEventListener('input', function() { epicFocus = +this.value; renderEpicCal(); runEpics(); });
+function parseEpicTp() {
+  const p = document.getElementById('epicTpInput').value.split(/[,;\s]+/).map(Number).filter(n => !isNaN(n) && n >= 0);
+  if (p.length > 0) { epicTp = p; runEpics(); }
+}
+document.getElementById('epicTpInput').addEventListener('blur', parseEpicTp);
+document.getElementById('epicTpInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') parseEpicTp(); });
+document.getElementById('epicStartDate').addEventListener('change', function() {
+  epicStartDate = new Date(this.value + 'T00:00:00');
+  buildEpicCalendar(); renderEpicCal(); runEpics();
+});
+document.getElementById('epicTargetDate').addEventListener('change', function() {
+  epicTargetDate = new Date(this.value + 'T00:00:00');
+  buildEpicCalendar(); renderEpicCal(); runEpics();
+});
+
+/* ═══════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════ */
+document.getElementById('targetDateInput').value = fmtISO(targetDate);
+renderCalendar();
+renderEpicCal();
+renderEpicList();
+run();
+runEpics();
+</script>
+</body>
+</html>
