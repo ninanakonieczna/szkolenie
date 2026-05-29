@@ -1,483 +1,480 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import _ from "lodash";
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monte Carlo Forecast – ASTRA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d1117;
+  --card: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --dim: #7d8590;
+  --accent: #58a6ff;
+  --accent2: #3fb950;
+  --accent3: #f78166;
+  --muted: #21262d;
+  --input-bg: #0d1117;
+  --display: 'Space Grotesk', sans-serif;
+  --body: 'DM Sans', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--body); background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px 20px; }
+input[type="range"] { height: 4px; accent-color: var(--accent); width: 100%; cursor: pointer; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* ─── Historical throughput from Astra data (items closed per 2-week sprint) ─── */
-const DEFAULT_THROUGHPUT = [3, 6, 6, 2, 2];
+.header { margin-bottom: 28px; }
+.header-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.header-bar { width: 8px; height: 32px; background: var(--accent); border-radius: 4px; }
+.header h1 { font-family: var(--display); font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+.header-sub { color: var(--dim); font-family: var(--mono); font-size: 11px; margin-left: 18px; letter-spacing: 0.5px; }
 
-/* ─── Monte Carlo Engine ─── */
-function runMonteCarloWhen(backlogSize, throughputSamples, numSims, sprintCalendar, startDate) {
-  const results = [];
-  for (let s = 0; s < numSims; s++) {
-    let remaining = backlogSize;
-    let sprintIdx = 0;
-    let totalDays = 0;
-    while (remaining > 0 && sprintIdx < 200) {
-      const cal = sprintCalendar[sprintIdx] || { capacity: 100, focus: 100 };
-      const baseThroughput = throughputSamples[Math.floor(Math.random() * throughputSamples.length)];
-      const adjusted = Math.max(1, Math.round(baseThroughput * (cal.capacity / 100) * (cal.focus / 100)));
-      remaining -= adjusted;
-      totalDays += 14;
-      sprintIdx++;
-    }
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + totalDays);
-    results.push({ sprints: sprintIdx, days: totalDays, endDate });
-  }
-  results.sort((a, b) => a.days - b.days);
-  return results;
+.controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.control-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+.slider-group { margin-bottom: 14px; }
+.slider-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.slider-label { font-size: 12px; color: var(--dim); font-family: var(--mono); text-transform: uppercase; letter-spacing: 1px; }
+.slider-value { font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--mono); }
+.info-box { font-size: 11px; color: var(--dim); font-family: var(--mono); background: var(--muted); border-radius: 6px; padding: 6px 10px; margin-top: 4px; }
+.info-box strong { color: var(--text); }
+.field-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); font-family: var(--mono); display: block; margin-bottom: 4px; }
+.text-input, .date-input {
+  background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 7px 10px; color: var(--text); font-family: var(--mono); font-size: 13px; width: 100%;
+}
+.throughput-stats { font-size: 10px; color: var(--dim); margin-top: 3px; font-family: var(--mono); }
+.mt-12 { margin-top: 12px; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+.tab-btn {
+  font-family: var(--mono); font-size: 12px; padding: 10px 18px;
+  border: 1px solid var(--border); background: transparent; color: var(--dim);
+  border-radius: 8px; cursor: pointer; font-weight: 400; transition: all 0.2s;
+}
+.tab-btn.active-when { border-color: var(--accent); background: rgba(88,166,255,0.09); color: var(--accent); font-weight: 600; }
+.tab-btn.active-howmany { border-color: var(--accent2); background: rgba(63,185,80,0.09); color: var(--accent2); font-weight: 600; }
+.tab-btn.active-calendar { border-color: var(--accent3); background: rgba(247,129,102,0.09); color: var(--accent3); font-weight: 600; }
+
+.stat-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; flex: 1; min-width: 200px; }
+.stat-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--dim); font-family: var(--mono); margin-bottom: 6px; }
+.stat-value { font-size: 28px; font-weight: 700; font-family: var(--display); line-height: 1.1; }
+.stat-sub { font-size: 12px; color: var(--dim); margin-top: 4px; font-family: var(--mono); }
+
+.chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.chart-card h3 { font-family: var(--display); font-size: 15px; margin-bottom: 4px; }
+.chart-sub { font-size: 11px; color: var(--dim); font-family: var(--mono); margin-bottom: 8px; }
+.histogram { display: flex; align-items: flex-end; gap: 1px; height: 120px; margin-top: 8px; }
+.hist-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.hist-bar { width: 100%; border-radius: 2px 2px 0 0; transition: height 0.3s; }
+.hist-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); font-family: var(--mono); margin-top: 4px; }
+
+.pct-card { margin-top: 16px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.pct-card h4 { font-family: var(--display); font-size: 13px; margin-bottom: 6px; }
+.pct-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.pct-item { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; text-align: center; min-width: 80px; }
+.pct-label { font-size: 10px; color: var(--dim); font-family: var(--mono); text-transform: uppercase; }
+.pct-value { font-size: 16px; font-weight: 700; font-family: var(--display); }
+
+.cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.cal-header h3 { font-family: var(--display); font-size: 15px; }
+.cal-header p { font-size: 11px; color: var(--dim); font-family: var(--mono); }
+.reset-btn {
+  font-family: var(--mono); font-size: 11px; padding: 6px 14px;
+  background: var(--muted); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--dim); cursor: pointer;
+}
+.reset-btn:hover { color: var(--text); border-color: var(--dim); }
+.cal-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
+.cal-table th {
+  padding: 8px 6px; text-align: left; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 1px; font-size: 10px;
+  border-bottom: 2px solid var(--border);
+}
+.cal-table th.center { text-align: center; }
+.cal-table td { padding: 6px; border-bottom: 1px solid var(--border); }
+.cal-table td.center { text-align: center; }
+.cal-table tr.low-eff { background: rgba(255,140,0,0.06); }
+.cal-input {
+  width: 52px; text-align: center; background: var(--input-bg);
+  border: 1px solid var(--border); border-radius: 4px; padding: 3px 4px;
+  color: var(--text); font-family: var(--mono); font-size: 12px;
+}
+.eff-high { font-weight: 600; color: #27ae60; }
+.eff-mid { font-weight: 600; color: #f39c12; }
+.eff-low { font-weight: 600; color: #e74c3c; }
+
+.footer {
+  margin-top: 28px; padding: 14px 0; border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10px; color: var(--dim); font-family: var(--mono);
 }
 
-function runMonteCarloHowMany(targetDate, throughputSamples, numSims, sprintCalendar, startDate) {
-  const totalDays = Math.max(0, Math.ceil((targetDate - startDate) / (1000 * 60 * 60 * 24)));
-  const totalSprints = Math.floor(totalDays / 14);
-  const results = [];
-  for (let s = 0; s < numSims; s++) {
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+@media (max-width: 768px) {
+  .controls-grid { grid-template-columns: 1fr; }
+  .stat-row { flex-direction: column; }
+  .tabs { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-row">
+    <div class="header-bar"></div>
+    <h1>Monte Carlo Forecast</h1>
+  </div>
+  <p class="header-sub" id="headerSub">ASTRA · 10 000 symulacji · dane historyczne z 5 sprintów</p>
+</div>
+
+<div class="controls-grid">
+  <div class="control-panel">
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-label">Elementy w backlogu</span>
+        <span class="slider-value" id="backlogVal">30</span>
+      </div>
+      <input type="range" id="backlogSlider" min="1" max="200" value="30">
+    </div>
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-label">% backlogu do prognozy</span>
+        <span class="slider-value" id="backlogPctVal">100%</span>
+      </div>
+      <input type="range" id="backlogPctSlider" min="10" max="100" value="100">
+    </div>
+    <div class="info-box">Prognozowane elementy: <strong id="effectiveBacklogDisp">30</strong> z <span id="totalBacklogDisp">30</span></div>
+  </div>
+  <div class="control-panel">
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-label">Prawdopodobieństwo prognozy</span>
+        <span class="slider-value" id="probVal">85%</span>
+      </div>
+      <input type="range" id="probSlider" min="50" max="99" value="85">
+    </div>
+    <div>
+      <label class="field-label">Przepustowość historyczna (items/sprint)</label>
+      <input type="text" class="text-input" id="throughputInput" value="3, 6, 6, 2, 2">
+      <div class="throughput-stats" id="throughputStats">Średnia: 3.8 · Min: 2 · Max: 6 · Próbek: 5</div>
+    </div>
+    <div class="mt-12">
+      <label class="field-label">Data docelowa (dla "Ile zrobimy?")</label>
+      <input type="date" class="date-input" id="targetDateInput">
+    </div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active-when" id="tabWhen" onclick="switchTab('when')">📅 Kiedy skończymy?</button>
+  <button class="tab-btn" id="tabHowmany" onclick="switchTab('howmany')">📊 Ile zrobimy?</button>
+  <button class="tab-btn" id="tabCalendar" onclick="switchTab('calendar')">🗓️ Kalendarz sprintów</button>
+</div>
+
+<div class="tab-content active" id="panelWhen">
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-title" id="whenTitle1">🎯 100% BACKLOGU @ P85</div>
+      <div class="stat-value" style="color:var(--accent)" id="whenVal1">–</div>
+      <div class="stat-sub" id="whenSub1"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-title">📌 85% BACKLOGU @ P85</div>
+      <div class="stat-value" style="color:var(--accent2)" id="whenVal2">–</div>
+      <div class="stat-sub" id="whenSub2"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-title">⚡ NAJLEPSZY SCENARIUSZ</div>
+      <div class="stat-value" style="color:var(--accent3)" id="whenVal3">–</div>
+      <div class="stat-sub" id="whenSub3"></div>
+    </div>
+  </div>
+  <div class="chart-card">
+    <h3 id="whenChartTitle">Rozkład wyników – dni do ukończenia</h3>
+    <p class="chart-sub" id="whenChartSub"></p>
+    <div class="histogram" id="whenHistogram"></div>
+    <div class="hist-axis"><span id="whenAxisMin"></span><span id="whenAxisMax"></span></div>
+  </div>
+  <div class="pct-card">
+    <h4>Percentyle – daty ukończenia</h4>
+    <div class="pct-row" id="whenPercentiles"></div>
+  </div>
+</div>
+
+<div class="tab-content" id="panelHowmany">
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-title" id="hmTitle1">📊 UKOŃCZYMY DO ... @ P85</div>
+      <div class="stat-value" style="color:var(--accent2)" id="hmVal1">–</div>
+      <div class="stat-sub" id="hmSub1"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-title">✅ MEDIANA (P50)</div>
+      <div class="stat-value" style="color:var(--accent)" id="hmVal2">–</div>
+      <div class="stat-sub">50% szans na tyle lub więcej</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-title">🛡️ BEZPIECZNA EST. (P95)</div>
+      <div class="stat-value" style="color:var(--accent3)" id="hmVal3">–</div>
+      <div class="stat-sub">95% szans</div>
+    </div>
+  </div>
+  <div class="chart-card">
+    <h3 id="hmChartTitle">Rozkład – ile elementów ukończymy</h3>
+    <p class="chart-sub" id="hmChartSub"></p>
+    <div class="histogram" id="hmHistogram"></div>
+    <div class="hist-axis"><span id="hmAxisMin"></span><span id="hmAxisMax"></span></div>
+  </div>
+  <div class="pct-card">
+    <h4>Percentyle – liczba ukończonych elementów</h4>
+    <div class="pct-row" id="hmPercentiles"></div>
+  </div>
+</div>
+
+<div class="tab-content" id="panelCalendar">
+  <div class="chart-card">
+    <div class="cal-header">
+      <div>
+        <h3>Kalendarz sprintów</h3>
+        <p>Dostosuj capacity (dostępność zespołu) i focus (skupienie na produkcie) – symulacja aktualizuje się automatycznie</p>
+      </div>
+      <button class="reset-btn" onclick="resetCalendar()">Reset all → 100%</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="cal-table">
+        <thead>
+          <tr>
+            <th>Sprint</th>
+            <th>Daty</th>
+            <th class="center">Capacity %</th>
+            <th class="center">Focus %</th>
+            <th class="center">Efekt</th>
+          </tr>
+        </thead>
+        <tbody id="calendarBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span id="footerLeft">Monte Carlo · 10 000 symulacji · Sprinty 2-tygodniowe · Dane: Astra backlog</span>
+  <span id="footerRight"></span>
+</div>
+
+<script>
+const NUM_SIMS = 10000;
+let backlogSize = 30, backlogPercent = 100, probability = 85;
+let throughput = [3, 6, 6, 2, 2];
+let activeTab = 'when';
+const startDate = new Date();
+let targetDate = new Date();
+targetDate.setMonth(targetDate.getMonth() + 4);
+
+let sprintCalendar = [];
+(function() {
+  const s = new Date();
+  for (let i = 0; i < 30; i++) {
+    const start = new Date(s); start.setDate(start.getDate() + i * 14);
+    const end = new Date(start); end.setDate(end.getDate() + 13);
+    sprintCalendar.push({ start, end, capacity: 100, focus: 100 });
+  }
+})();
+
+function runMCWhen(bSize, tp, n, cal, sd) {
+  const r = [];
+  for (let s = 0; s < n; s++) {
+    let rem = bSize, si = 0, td = 0;
+    while (rem > 0 && si < 200) {
+      const c = cal[si] || { capacity: 100, focus: 100 };
+      const base = tp[Math.floor(Math.random() * tp.length)];
+      rem -= Math.max(1, Math.round(base * (c.capacity / 100) * (c.focus / 100)));
+      td += 14; si++;
+    }
+    const ed = new Date(sd); ed.setDate(ed.getDate() + td);
+    r.push({ sprints: si, days: td, endDate: ed });
+  }
+  r.sort((a, b) => a.days - b.days);
+  return r;
+}
+
+function runMCHowMany(tDate, tp, n, cal, sd) {
+  const totalSp = Math.floor(Math.max(0, Math.ceil((tDate - sd) / 864e5)) / 14);
+  const r = [];
+  for (let s = 0; s < n; s++) {
     let done = 0;
-    for (let sp = 0; sp < totalSprints; sp++) {
-      const cal = sprintCalendar[sp] || { capacity: 100, focus: 100 };
-      const baseThroughput = throughputSamples[Math.floor(Math.random() * throughputSamples.length)];
-      const adjusted = Math.max(0, Math.round(baseThroughput * (cal.capacity / 100) * (cal.focus / 100)));
-      done += adjusted;
+    for (let sp = 0; sp < totalSp; sp++) {
+      const c = cal[sp] || { capacity: 100, focus: 100 };
+      const base = tp[Math.floor(Math.random() * tp.length)];
+      done += Math.max(0, Math.round(base * (c.capacity / 100) * (c.focus / 100)));
     }
-    results.push(done);
+    r.push(done);
   }
-  results.sort((a, b) => a - b);
-  return results;
+  r.sort((a, b) => a - b);
+  return r;
 }
 
-function getPercentile(sorted, p) {
-  const idx = Math.ceil((p / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, idx)];
-}
+function pct(sorted, p) { return sorted[Math.max(0, Math.ceil((p / 100) * sorted.length) - 1)]; }
 
-function buildHistogram(values, buckets = 20) {
-  const min = values[0];
-  const max = values[values.length - 1];
-  const range = max - min || 1;
-  const step = range / buckets;
-  const bins = Array.from({ length: buckets }, (_, i) => ({
-    min: min + i * step,
-    max: min + (i + 1) * step,
-    count: 0,
-  }));
-  values.forEach((v) => {
-    let idx = Math.min(Math.floor((v - min) / step), buckets - 1);
-    bins[idx].count++;
-  });
+function hist(vals, buckets) {
+  buckets = buckets || 25;
+  const mn = vals[0], mx = vals[vals.length - 1], rng = mx - mn || 1, step = rng / buckets;
+  const bins = [];
+  for (let i = 0; i < buckets; i++) bins.push({ min: mn + i * step, max: mn + (i + 1) * step, count: 0 });
+  vals.forEach(v => { bins[Math.min(Math.floor((v - mn) / step), buckets - 1)].count++; });
   return bins;
 }
 
-/* ─── Formatters ─── */
-const fmt = (d) => {
-  if (d instanceof Date) return d.toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" });
-  return d;
-};
-const fmtISO = (d) => d.toISOString().split("T")[0];
+function fmtDate(d) { return d instanceof Date ? d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : d; }
+function fmtISO(d) { return d.toISOString().split('T')[0]; }
+function effBacklog() { return Math.ceil(backlogSize * (backlogPercent / 100)); }
 
-/* ─── Components ─── */
-const NUM_SIMS = 10000;
-
-function Histogram({ data, highlight, label, color }) {
-  const maxCount = Math.max(...data.map((b) => b.count));
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 120, marginTop: 8 }}>
-      {data.map((bin, i) => {
-        const h = maxCount > 0 ? (bin.count / maxCount) * 100 : 0;
-        const midVal = (bin.min + bin.max) / 2;
-        const isHighlight = highlight !== undefined && midVal <= highlight;
-        return (
-          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
-            <div
-              style={{
-                width: "100%",
-                height: `${h}%`,
-                minHeight: bin.count > 0 ? 2 : 0,
-                background: isHighlight ? color : "var(--muted)",
-                borderRadius: "2px 2px 0 0",
-                transition: "height 0.3s",
-              }}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function StatCard({ title, value, sub, color, icon }) {
-  return (
-    <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "18px 20px", flex: 1, minWidth: 200 }}>
-      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.5, color: "var(--dim)", fontFamily: "var(--mono)", marginBottom: 6 }}>
-        {icon} {title}
-      </div>
-      <div style={{ fontSize: 28, fontWeight: 700, color, fontFamily: "var(--display)", lineHeight: 1.1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4, fontFamily: "var(--mono)" }}>{sub}</div>}
-    </div>
-  );
-}
-
-function SliderInput({ label, value, onChange, min, max, step = 1, unit = "" }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <label style={{ fontSize: 12, color: "var(--dim)", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: 1 }}>{label}</label>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", fontFamily: "var(--mono)" }}>
-          {value}{unit}
-        </span>
-      </div>
-      <input
-        type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))}
-        style={{ width: "100%", accentColor: "var(--accent)" }}
-      />
-    </div>
-  );
-}
-
-/* ─── Sprint Calendar ─── */
-function SprintCalendar({ sprints, onChange }) {
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "var(--mono)" }}>
-        <thead>
-          <tr style={{ borderBottom: "2px solid var(--border)" }}>
-            <th style={{ padding: "8px 6px", textAlign: "left", color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, fontSize: 10 }}>Sprint</th>
-            <th style={{ padding: "8px 6px", textAlign: "left", color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, fontSize: 10 }}>Daty</th>
-            <th style={{ padding: "8px 6px", textAlign: "center", color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, fontSize: 10 }}>Capacity %</th>
-            <th style={{ padding: "8px 6px", textAlign: "center", color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, fontSize: 10 }}>Focus %</th>
-            <th style={{ padding: "8px 6px", textAlign: "center", color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, fontSize: 10 }}>Efekt</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sprints.map((sp, i) => {
-            const eff = Math.round((sp.capacity / 100) * (sp.focus / 100) * 100);
-            return (
-              <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: eff < 70 ? "rgba(255,140,0,0.06)" : "transparent" }}>
-                <td style={{ padding: "6px" }}>S{i + 1}</td>
-                <td style={{ padding: "6px", color: "var(--dim)" }}>
-                  {fmt(sp.start)} – {fmt(sp.end)}
-                </td>
-                <td style={{ padding: "6px", textAlign: "center" }}>
-                  <input
-                    type="number" min={0} max={100} value={sp.capacity}
-                    onChange={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); onChange(i, "capacity", v); }}
-                    style={{ width: 52, textAlign: "center", background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 4, padding: "3px 4px", color: "var(--text)", fontFamily: "var(--mono)", fontSize: 12 }}
-                  />
-                </td>
-                <td style={{ padding: "6px", textAlign: "center" }}>
-                  <input
-                    type="number" min={0} max={100} value={sp.focus}
-                    onChange={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); onChange(i, "focus", v); }}
-                    style={{ width: 52, textAlign: "center", background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 4, padding: "3px 4px", color: "var(--text)", fontFamily: "var(--mono)", fontSize: 12 }}
-                  />
-                </td>
-                <td style={{ padding: "6px", textAlign: "center", fontWeight: 600, color: eff < 50 ? "#e74c3c" : eff < 80 ? "#f39c12" : "#27ae60" }}>
-                  {eff}%
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/* ─── Throughput Editor ─── */
-function ThroughputEditor({ values, onChange }) {
-  const [text, setText] = useState(values.join(", "));
-  useEffect(() => { setText(values.join(", ")); }, [values]);
-  const apply = () => {
-    const parsed = text.split(/[,;\s]+/).map(Number).filter((n) => !isNaN(n) && n >= 0);
-    if (parsed.length > 0) onChange(parsed);
-  };
-  return (
-    <div>
-      <label style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "var(--dim)", fontFamily: "var(--mono)", display: "block", marginBottom: 4 }}>
-        Przepustowość historyczna (items/sprint)
-      </label>
-      <div style={{ display: "flex", gap: 6 }}>
-        <input
-          value={text} onChange={(e) => setText(e.target.value)} onBlur={apply} onKeyDown={(e) => e.key === "Enter" && apply()}
-          style={{ flex: 1, background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", color: "var(--text)", fontFamily: "var(--mono)", fontSize: 13 }}
-          placeholder="np. 3, 6, 6, 2, 2"
-        />
-      </div>
-      <div style={{ fontSize: 10, color: "var(--dim)", marginTop: 3, fontFamily: "var(--mono)" }}>
-        Średnia: {(values.reduce((a, b) => a + b, 0) / values.length).toFixed(1)} · Min: {Math.min(...values)} · Max: {Math.max(...values)} · Próbek: {values.length}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Percentile Bar ─── */
-function PercentileBar({ percentiles, color }) {
-  const marks = [50, 70, 85, 95];
-  return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-      {marks.map((p) => (
-        <div key={p} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 14px", textAlign: "center", minWidth: 80 }}>
-          <div style={{ fontSize: 10, color: "var(--dim)", fontFamily: "var(--mono)", textTransform: "uppercase" }}>P{p}</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color, fontFamily: "var(--display)" }}>{percentiles[p]}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ─── MAIN ─── */
-export default function MonteCarloDashboard() {
-  const [backlogSize, setBacklogSize] = useState(30);
-  const [backlogPercent, setBacklogPercent] = useState(100);
-  const [probability, setProbability] = useState(85);
-  const [throughput, setThroughput] = useState(DEFAULT_THROUGHPUT);
-  const [targetDateStr, setTargetDateStr] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() + 4); return fmtISO(d);
+function renderHist(id, data, hlVal, color) {
+  const el = document.getElementById(id), mx = Math.max(...data.map(b => b.count));
+  let h = '';
+  data.forEach(bin => {
+    const ht = mx > 0 ? (bin.count / mx) * 100 : 0;
+    const hl = hlVal !== undefined && (bin.min + bin.max) / 2 <= hlVal;
+    const bg = hl ? color : 'var(--muted)';
+    const mh = bin.count > 0 ? 'min-height:2px;' : '';
+    h += '<div class="hist-bar-wrap"><div class="hist-bar" style="height:' + ht + '%;' + mh + 'background:' + bg + '"></div></div>';
   });
-  const [activeTab, setActiveTab] = useState("when");
-
-  const startDate = useMemo(() => new Date(), []);
-  const targetDate = useMemo(() => new Date(targetDateStr + "T00:00:00"), [targetDateStr]);
-
-  /* Build sprint calendar */
-  const [sprintCalendar, setSprintCalendar] = useState(() => {
-    const sprints = [];
-    const s = new Date();
-    for (let i = 0; i < 30; i++) {
-      const start = new Date(s);
-      start.setDate(start.getDate() + i * 14);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 13);
-      sprints.push({ start, end, capacity: 100, focus: 100 });
-    }
-    return sprints;
-  });
-
-  const updateSprint = useCallback((idx, field, val) => {
-    setSprintCalendar((prev) => prev.map((sp, i) => (i === idx ? { ...sp, [field]: val } : sp)));
-  }, []);
-
-  const effectiveBacklog = Math.ceil(backlogSize * (backlogPercent / 100));
-
-  /* Monte Carlo: WHEN */
-  const whenResults = useMemo(() => {
-    return runMonteCarloWhen(effectiveBacklog, throughput, NUM_SIMS, sprintCalendar, startDate);
-  }, [effectiveBacklog, throughput, sprintCalendar, startDate]);
-
-  const whenDateAtProb = useMemo(() => {
-    const r = getPercentile(whenResults, probability);
-    return r.endDate;
-  }, [whenResults, probability]);
-
-  const whenDateAt85 = useMemo(() => {
-    const items85 = Math.ceil(backlogSize * 0.85);
-    const r85 = runMonteCarloWhen(items85, throughput, NUM_SIMS, sprintCalendar, startDate);
-    return getPercentile(r85, 85).endDate;
-  }, [backlogSize, throughput, sprintCalendar, startDate]);
-
-  const whenHistData = useMemo(() => {
-    const days = whenResults.map((r) => r.days);
-    return buildHistogram(days, 25);
-  }, [whenResults]);
-
-  const whenPercentiles = useMemo(() => {
-    const ps = {};
-    [50, 70, 85, 95].forEach((p) => { ps[p] = fmt(getPercentile(whenResults, p).endDate); });
-    return ps;
-  }, [whenResults]);
-
-  /* Monte Carlo: HOW MANY */
-  const howManyResults = useMemo(() => {
-    return runMonteCarloHowMany(targetDate, throughput, NUM_SIMS, sprintCalendar, startDate);
-  }, [targetDate, throughput, sprintCalendar, startDate]);
-
-  const howManyAtProb = useMemo(() => getPercentile(howManyResults, probability), [howManyResults, probability]);
-
-  const howManyHistData = useMemo(() => buildHistogram(howManyResults, 25), [howManyResults]);
-
-  const howManyPercentiles = useMemo(() => {
-    const ps = {};
-    [50, 70, 85, 95].forEach((p) => { ps[p] = getPercentile(howManyResults, p); });
-    return ps;
-  }, [howManyResults]);
-
-  /* ─── STYLES ─── */
-  const css = `
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap');
-    :root {
-      --bg: #0d1117;
-      --card: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --dim: #7d8590;
-      --accent: #58a6ff;
-      --accent2: #3fb950;
-      --accent3: #f78166;
-      --muted: #21262d;
-      --input-bg: #0d1117;
-      --display: 'Space Grotesk', sans-serif;
-      --body: 'DM Sans', sans-serif;
-      --mono: 'JetBrains Mono', monospace;
-      --tab-active: #58a6ff;
-      --tab-inactive: #30363d;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    input[type="range"] { height: 4px; }
-    input[type="range"]::-webkit-slider-thumb { cursor: pointer; }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  `;
-
-  const tabs = [
-    { id: "when", label: "📅 Kiedy skończymy?", color: "var(--accent)" },
-    { id: "howmany", label: "📊 Ile zrobimy?", color: "var(--accent2)" },
-    { id: "calendar", label: "🗓️ Kalendarz sprintów", color: "var(--accent3)" },
-  ];
-
-  return (
-    <div style={{ fontFamily: "var(--body)", background: "var(--bg)", color: "var(--text)", minHeight: "100vh", padding: "24px 20px" }}>
-      <style>{css}</style>
-
-      {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <div style={{ width: 8, height: 32, background: "var(--accent)", borderRadius: 4 }} />
-          <h1 style={{ fontFamily: "var(--display)", fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>Monte Carlo Forecast</h1>
-        </div>
-        <p style={{ color: "var(--dim)", fontFamily: "var(--mono)", fontSize: 11, marginLeft: 18, letterSpacing: 0.5 }}>
-          ASTRA · {NUM_SIMS.toLocaleString()} symulacji · dane historyczne z {throughput.length} sprintów
-        </p>
-      </div>
-
-      {/* Controls Panel */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 18 }}>
-          <SliderInput label="Elementy w backlogu" value={backlogSize} onChange={setBacklogSize} min={1} max={200} />
-          <SliderInput label="% backlogu do prognozy" value={backlogPercent} onChange={setBacklogPercent} min={10} max={100} unit="%" />
-          <div style={{ fontSize: 11, color: "var(--dim)", fontFamily: "var(--mono)", background: "var(--muted)", borderRadius: 6, padding: "6px 10px", marginTop: 4 }}>
-            Prognozowane elementy: <strong style={{ color: "var(--text)" }}>{effectiveBacklog}</strong> z {backlogSize}
-          </div>
-        </div>
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 18 }}>
-          <SliderInput label="Prawdopodobieństwo prognozy" value={probability} onChange={setProbability} min={50} max={99} unit="%" />
-          <ThroughputEditor values={throughput} onChange={setThroughput} />
-          <div style={{ marginTop: 12 }}>
-            <label style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "var(--dim)", fontFamily: "var(--mono)", display: "block", marginBottom: 4 }}>
-              Data docelowa (dla "Ile zrobimy?")
-            </label>
-            <input
-              type="date" value={targetDateStr} onChange={(e) => setTargetDateStr(e.target.value)}
-              style={{ background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", color: "var(--text)", fontFamily: "var(--mono)", fontSize: 13 }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
-        {tabs.map((t) => (
-          <button
-            key={t.id} onClick={() => setActiveTab(t.id)}
-            style={{
-              fontFamily: "var(--mono)", fontSize: 12, padding: "10px 18px", border: "1px solid",
-              borderColor: activeTab === t.id ? t.color : "var(--tab-inactive)",
-              background: activeTab === t.id ? t.color + "18" : "transparent",
-              color: activeTab === t.id ? t.color : "var(--dim)",
-              borderRadius: 8, cursor: "pointer", fontWeight: activeTab === t.id ? 600 : 400,
-              transition: "all 0.2s",
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* TAB: WHEN */}
-      {activeTab === "when" && (
-        <div>
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
-            <StatCard icon="🎯" title={`${backlogPercent}% backlogu @ P${probability}`} value={fmt(whenDateAtProb)} sub={`${getPercentile(whenResults, probability).sprints} sprintów`} color="var(--accent)" />
-            <StatCard icon="📌" title="85% backlogu @ P85" value={fmt(whenDateAt85)} sub={`${Math.ceil(backlogSize * 0.85)} elementów`} color="var(--accent2)" />
-            <StatCard icon="⚡" title="Najlepszy scenariusz" value={fmt(whenResults[0].endDate)} sub={`${whenResults[0].sprints} sprintów (P1)`} color="var(--accent3)" />
-          </div>
-
-          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-            <h3 style={{ fontFamily: "var(--display)", fontSize: 15, marginBottom: 4 }}>Rozkład wyników – dni do ukończenia {effectiveBacklog} elementów</h3>
-            <p style={{ fontSize: 11, color: "var(--dim)", fontFamily: "var(--mono)", marginBottom: 8 }}>
-              Podświetlenie: P{probability} = {getPercentile(whenResults, probability).days} dni
-            </p>
-            <Histogram data={whenHistData} highlight={getPercentile(whenResults, probability).days} label="dni" color="var(--accent)" />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--dim)", fontFamily: "var(--mono)", marginTop: 4 }}>
-              <span>{whenResults[0].days}d</span>
-              <span>{whenResults[whenResults.length - 1].days}d</span>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
-            <h4 style={{ fontFamily: "var(--display)", fontSize: 13, marginBottom: 6 }}>Percentyle – daty ukończenia</h4>
-            <PercentileBar percentiles={whenPercentiles} color="var(--accent)" />
-          </div>
-        </div>
-      )}
-
-      {/* TAB: HOW MANY */}
-      {activeTab === "howmany" && (
-        <div>
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
-            <StatCard icon="📊" title={`Ukończymy do ${fmt(targetDate)} @ P${probability}`} value={`${howManyAtProb} items`} sub={`z ${effectiveBacklog} w backlogu`} color="var(--accent2)" />
-            <StatCard icon="✅" title="Mediana (P50)" value={`${getPercentile(howManyResults, 50)} items`} sub="50% szans na tyle lub więcej" color="var(--accent)" />
-            <StatCard icon="🛡️" title="Bezpieczna est. (P95)" value={`${getPercentile(howManyResults, 95)} items`} sub="95% szans" color="var(--accent3)" />
-          </div>
-
-          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-            <h3 style={{ fontFamily: "var(--display)", fontSize: 15, marginBottom: 4 }}>Rozkład – ile elementów ukończymy do {fmt(targetDate)}</h3>
-            <p style={{ fontSize: 11, color: "var(--dim)", fontFamily: "var(--mono)", marginBottom: 8 }}>
-              Podświetlenie: P{probability} = {howManyAtProb} elementów
-            </p>
-            <Histogram data={howManyHistData} highlight={howManyAtProb} label="items" color="var(--accent2)" />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--dim)", fontFamily: "var(--mono)", marginTop: 4 }}>
-              <span>{howManyResults[0]}</span>
-              <span>{howManyResults[howManyResults.length - 1]}</span>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
-            <h4 style={{ fontFamily: "var(--display)", fontSize: 13, marginBottom: 6 }}>Percentyle – liczba ukończonych elementów</h4>
-            <PercentileBar percentiles={howManyPercentiles} color="var(--accent2)" />
-          </div>
-        </div>
-      )}
-
-      {/* TAB: CALENDAR */}
-      {activeTab === "calendar" && (
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div>
-              <h3 style={{ fontFamily: "var(--display)", fontSize: 15 }}>Kalendarz sprintów</h3>
-              <p style={{ fontSize: 11, color: "var(--dim)", fontFamily: "var(--mono)" }}>
-                Dostosuj capacity (dostępność zespołu) i focus (skupienie na produkcie) – symulacja aktualizuje się automatycznie
-              </p>
-            </div>
-            <button
-              onClick={() => setSprintCalendar((prev) => prev.map((sp) => ({ ...sp, capacity: 100, focus: 100 })))}
-              style={{ fontFamily: "var(--mono)", fontSize: 11, padding: "6px 14px", background: "var(--muted)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--dim)", cursor: "pointer" }}
-            >
-              Reset all →100%
-            </button>
-          </div>
-          <SprintCalendar sprints={sprintCalendar} onChange={updateSprint} />
-        </div>
-      )}
-
-      {/* Footer */}
-      <div style={{ marginTop: 28, padding: "14px 0", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 10, color: "var(--dim)", fontFamily: "var(--mono)" }}>
-          Monte Carlo · {NUM_SIMS.toLocaleString()} symulacji · Sprinty 2-tygodniowe · Dane: Astra backlog
-        </span>
-        <span style={{ fontSize: 10, color: "var(--dim)", fontFamily: "var(--mono)" }}>
-          Backlog: {effectiveBacklog} el. · Throughput: {throughput.join(", ")} items/sprint
-        </span>
-      </div>
-    </div>
-  );
+  el.innerHTML = h;
 }
+
+function renderPcts(id, ps, color) {
+  const el = document.getElementById(id);
+  let h = '';
+  [50, 70, 85, 95].forEach(p => {
+    h += '<div class="pct-item"><div class="pct-label">P' + p + '</div><div class="pct-value" style="color:' + color + '">' + ps[p] + '</div></div>';
+  });
+  el.innerHTML = h;
+}
+
+function renderCalendar() {
+  const tbody = document.getElementById('calendarBody');
+  let h = '';
+  sprintCalendar.forEach((sp, i) => {
+    const eff = Math.round((sp.capacity / 100) * (sp.focus / 100) * 100);
+    const cls = eff < 70 ? ' class="low-eff"' : '';
+    const ec = eff < 50 ? 'eff-low' : eff < 80 ? 'eff-mid' : 'eff-high';
+    h += '<tr' + cls + '><td>S' + (i + 1) + '</td><td style="color:var(--dim)">' + fmtDate(sp.start) + ' – ' + fmtDate(sp.end) + '</td>' +
+      '<td class="center"><input class="cal-input" type="number" min="0" max="100" value="' + sp.capacity + '" onchange="updSprint(' + i + ',\'capacity\',this.value)"></td>' +
+      '<td class="center"><input class="cal-input" type="number" min="0" max="100" value="' + sp.focus + '" onchange="updSprint(' + i + ',\'focus\',this.value)"></td>' +
+      '<td class="center ' + ec + '">' + eff + '%</td></tr>';
+  });
+  tbody.innerHTML = h;
+}
+
+function updSprint(i, f, v) {
+  sprintCalendar[i][f] = Math.max(0, Math.min(100, parseInt(v) || 0));
+  renderCalendar();
+  run();
+}
+
+function resetCalendar() {
+  sprintCalendar.forEach(sp => { sp.capacity = 100; sp.focus = 100; });
+  renderCalendar();
+  run();
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.className = 'tab-btn');
+  const map = { when: ['panelWhen', 'tabWhen', 'active-when'], howmany: ['panelHowmany', 'tabHowmany', 'active-howmany'], calendar: ['panelCalendar', 'tabCalendar', 'active-calendar'] };
+  const m = map[tab];
+  document.getElementById(m[0]).classList.add('active');
+  document.getElementById(m[1]).className = 'tab-btn ' + m[2];
+}
+
+function run() {
+  const eff = effBacklog();
+  document.getElementById('backlogVal').textContent = backlogSize;
+  document.getElementById('backlogPctVal').textContent = backlogPercent + '%';
+  document.getElementById('probVal').textContent = probability + '%';
+  document.getElementById('effectiveBacklogDisp').textContent = eff;
+  document.getElementById('totalBacklogDisp').textContent = backlogSize;
+
+  const avg = (throughput.reduce((a, b) => a + b, 0) / throughput.length).toFixed(1);
+  document.getElementById('throughputStats').textContent = 'Średnia: ' + avg + ' · Min: ' + Math.min(...throughput) + ' · Max: ' + Math.max(...throughput) + ' · Próbek: ' + throughput.length;
+  document.getElementById('headerSub').textContent = 'ASTRA · ' + NUM_SIMS.toLocaleString() + ' symulacji · dane historyczne z ' + throughput.length + ' sprintów';
+
+  // WHEN
+  const wr = runMCWhen(eff, throughput, NUM_SIMS, sprintCalendar, startDate);
+  const wp = pct(wr, probability);
+  const items85 = Math.ceil(backlogSize * 0.85);
+  const w85 = runMCWhen(items85, throughput, NUM_SIMS, sprintCalendar, startDate);
+  const wp85 = pct(w85, 85);
+
+  document.getElementById('whenTitle1').textContent = '🎯 ' + backlogPercent + '% BACKLOGU @ P' + probability;
+  document.getElementById('whenVal1').textContent = fmtDate(wp.endDate);
+  document.getElementById('whenSub1').textContent = wp.sprints + ' sprintów';
+  document.getElementById('whenVal2').textContent = fmtDate(wp85.endDate);
+  document.getElementById('whenSub2').textContent = items85 + ' elementów';
+  document.getElementById('whenVal3').textContent = fmtDate(wr[0].endDate);
+  document.getElementById('whenSub3').textContent = wr[0].sprints + ' sprintów (P1)';
+
+  document.getElementById('whenChartTitle').textContent = 'Rozkład wyników – dni do ukończenia ' + eff + ' elementów';
+  document.getElementById('whenChartSub').textContent = 'Podświetlenie: P' + probability + ' = ' + wp.days + ' dni';
+
+  const wd = wr.map(r => r.days);
+  renderHist('whenHistogram', hist(wd, 25), wp.days, 'var(--accent)');
+  document.getElementById('whenAxisMin').textContent = wr[0].days + 'd';
+  document.getElementById('whenAxisMax').textContent = wr[wr.length - 1].days + 'd';
+
+  const wPcts = {};
+  [50, 70, 85, 95].forEach(p => { wPcts[p] = fmtDate(pct(wr, p).endDate); });
+  renderPcts('whenPercentiles', wPcts, 'var(--accent)');
+
+  // HOW MANY
+  const hr = runMCHowMany(targetDate, throughput, NUM_SIMS, sprintCalendar, startDate);
+  const hp = pct(hr, probability);
+
+  document.getElementById('hmTitle1').textContent = '📊 UKOŃCZYMY DO ' + fmtDate(targetDate) + ' @ P' + probability;
+  document.getElementById('hmVal1').textContent = hp + ' items';
+  document.getElementById('hmSub1').textContent = 'z ' + eff + ' w backlogu';
+  document.getElementById('hmVal2').textContent = pct(hr, 50) + ' items';
+  document.getElementById('hmVal3').textContent = pct(hr, 95) + ' items';
+
+  document.getElementById('hmChartTitle').textContent = 'Rozkład – ile elementów ukończymy do ' + fmtDate(targetDate);
+  document.getElementById('hmChartSub').textContent = 'Podświetlenie: P' + probability + ' = ' + hp + ' elementów';
+
+  renderHist('hmHistogram', hist(hr, 25), hp, 'var(--accent2)');
+  document.getElementById('hmAxisMin').textContent = hr[0];
+  document.getElementById('hmAxisMax').textContent = hr[hr.length - 1];
+
+  const hPcts = {};
+  [50, 70, 85, 95].forEach(p => { hPcts[p] = pct(hr, p); });
+  renderPcts('hmPercentiles', hPcts, 'var(--accent2)');
+
+  document.getElementById('footerRight').textContent = 'Backlog: ' + eff + ' el. · Throughput: ' + throughput.join(', ') + ' items/sprint';
+}
+
+document.getElementById('backlogSlider').addEventListener('input', function() { backlogSize = +this.value; run(); });
+document.getElementById('backlogPctSlider').addEventListener('input', function() { backlogPercent = +this.value; run(); });
+document.getElementById('probSlider').addEventListener('input', function() { probability = +this.value; run(); });
+
+function parseTp() {
+  const p = document.getElementById('throughputInput').value.split(/[,;\s]+/).map(Number).filter(n => !isNaN(n) && n >= 0);
+  if (p.length > 0) { throughput = p; run(); }
+}
+document.getElementById('throughputInput').addEventListener('blur', parseTp);
+document.getElementById('throughputInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') parseTp(); });
+document.getElementById('targetDateInput').addEventListener('change', function() { targetDate = new Date(this.value + 'T00:00:00'); run(); });
+
+document.getElementById('targetDateInput').value = fmtISO(targetDate);
+renderCalendar();
+run();
+</script>
+</body>
+</html>
