@@ -1,1 +1,483 @@
+import { useState, useEffect, useMemo, useCallback } from "react";
+import _ from "lodash";
 
+/* ─── Historical throughput from Astra data (items closed per 2-week sprint) ─── */
+const DEFAULT_THROUGHPUT = [3, 6, 6, 2, 2];
+
+/* ─── Monte Carlo Engine ─── */
+function runMonteCarloWhen(backlogSize, throughputSamples, numSims, sprintCalendar, startDate) {
+  const results = [];
+  for (let s = 0; s < numSims; s++) {
+    let remaining = backlogSize;
+    let sprintIdx = 0;
+    let totalDays = 0;
+    while (remaining > 0 && sprintIdx < 200) {
+      const cal = sprintCalendar[sprintIdx] || { capacity: 100, focus: 100 };
+      const baseThroughput = throughputSamples[Math.floor(Math.random() * throughputSamples.length)];
+      const adjusted = Math.max(1, Math.round(baseThroughput * (cal.capacity / 100) * (cal.focus / 100)));
+      remaining -= adjusted;
+      totalDays += 14;
+      sprintIdx++;
+    }
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + totalDays);
+    results.push({ sprints: sprintIdx, days: totalDays, endDate });
+  }
+  results.sort((a, b) => a.days - b.days);
+  return results;
+}
+
+function runMonteCarloHowMany(targetDate, throughputSamples, numSims, sprintCalendar, startDate) {
+  const totalDays = Math.max(0, Math.ceil((targetDate - startDate) / (1000 * 60 * 60 * 24)));
+  const totalSprints = Math.floor(totalDays / 14);
+  const results = [];
+  for (let s = 0; s < numSims; s++) {
+    let done = 0;
+    for (let sp = 0; sp < totalSprints; sp++) {
+      const cal = sprintCalendar[sp] || { capacity: 100, focus: 100 };
+      const baseThroughput = throughputSamples[Math.floor(Math.random() * throughputSamples.length)];
+      const adjusted = Math.max(0, Math.round(baseThroughput * (cal.capacity / 100) * (cal.focus / 100)));
+      done += adjusted;
+    }
+    results.push(done);
+  }
+  results.sort((a, b) => a - b);
+  return results;
+}
+
+function getPercentile(sorted, p) {
+  const idx = Math.ceil((p / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, idx)];
+}
+
+function buildHistogram(values, buckets = 20) {
+  const min = values[0];
+  const max = values[values.length - 1];
+  const range = max - min || 1;
+  const step = range / buckets;
+  const bins = Array.from({ length: buckets }, (_, i) => ({
+    min: min + i * step,
+    max: min + (i + 1) * step,
+    count: 0,
+  }));
+  values.forEach((v) => {
+    let idx = Math.min(Math.floor((v - min) / step), buckets - 1);
+    bins[idx].count++;
+  });
+  return bins;
+}
+
+/* ─── Formatters ─── */
+const fmt = (d) => {
+  if (d instanceof Date) return d.toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return d;
+};
+const fmtISO = (d) => d.toISOString().split("T")[0];
+
+/* ─── Components ─── */
+const NUM_SIMS = 10000;
+
+function Histogram({ data, highlight, label, color }) {
+  const maxCount = Math.max(...data.map((b) => b.count));
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 120, marginTop: 8 }}>
+      {data.map((bin, i) => {
+        const h = maxCount > 0 ? (bin.count / maxCount) * 100 : 0;
+        const midVal = (bin.min + bin.max) / 2;
+        const isHighlight = highlight !== undefined && midVal <= highlight;
+        return (
+          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+            <div
+              style={{
+                width: "100%",
+                height: `${h}%`,
+                minHeight: bin.count > 0 ? 2 : 0,
+                background: isHighlight ? color : "var(--muted)",
+                borderRadius: "2px 2px 0 0",
+                transition: "height 0.3s",
+              }}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function StatCard({ title, value, sub, color, icon }) {
+  return (
+    <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "18px 20px", flex: 1, minWidth: 200 }}>
+      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.5, color: "var(--dim)", fontFamily: "var(--mono)", marginBottom: 6 }}>
+        {icon} {title}
+      </div>
+      <div style={{ fontSize: 28, fontWeight: 700, color, fontFamily: "var(--display)", lineHeight: 1.1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4, fontFamily: "var(--mono)" }}>{sub}</div>}
+    </div>
+  );
+}
+
+function SliderInput({ label, value, onChange, min, max, step = 1, unit = "" }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+        <label style={{ fontSize: 12, color: "var(--dim)", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: 1 }}>{label}</label>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", fontFamily: "var(--mono)" }}>
+          {value}{unit}
+        </span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))}
+        style={{ width: "100%", accentColor: "var(--accent)" }}
+      />
+    </div>
+  );
+}
+
+/* ─── Sprint Calendar ─── */
+function SprintCalendar({ sprints, onChange }) {
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "var(--mono)" }}>
+        <thead>
+          <tr style={{ borderBottom: "2px solid var(--border)" }}>
+            <th style={{ padding: "8px 6px", textAlign: "left", color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, fontSize: 10 }}>Sprint</th>
+            <th style={{ padding: "8px 6px", textAlign: "left", color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, fontSize: 10 }}>Daty</th>
+            <th style={{ padding: "8px 6px", textAlign: "center", color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, fontSize: 10 }}>Capacity %</th>
+            <th style={{ padding: "8px 6px", textAlign: "center", color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, fontSize: 10 }}>Focus %</th>
+            <th style={{ padding: "8px 6px", textAlign: "center", color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, fontSize: 10 }}>Efekt</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sprints.map((sp, i) => {
+            const eff = Math.round((sp.capacity / 100) * (sp.focus / 100) * 100);
+            return (
+              <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: eff < 70 ? "rgba(255,140,0,0.06)" : "transparent" }}>
+                <td style={{ padding: "6px" }}>S{i + 1}</td>
+                <td style={{ padding: "6px", color: "var(--dim)" }}>
+                  {fmt(sp.start)} – {fmt(sp.end)}
+                </td>
+                <td style={{ padding: "6px", textAlign: "center" }}>
+                  <input
+                    type="number" min={0} max={100} value={sp.capacity}
+                    onChange={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); onChange(i, "capacity", v); }}
+                    style={{ width: 52, textAlign: "center", background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 4, padding: "3px 4px", color: "var(--text)", fontFamily: "var(--mono)", fontSize: 12 }}
+                  />
+                </td>
+                <td style={{ padding: "6px", textAlign: "center" }}>
+                  <input
+                    type="number" min={0} max={100} value={sp.focus}
+                    onChange={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); onChange(i, "focus", v); }}
+                    style={{ width: 52, textAlign: "center", background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 4, padding: "3px 4px", color: "var(--text)", fontFamily: "var(--mono)", fontSize: 12 }}
+                  />
+                </td>
+                <td style={{ padding: "6px", textAlign: "center", fontWeight: 600, color: eff < 50 ? "#e74c3c" : eff < 80 ? "#f39c12" : "#27ae60" }}>
+                  {eff}%
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ─── Throughput Editor ─── */
+function ThroughputEditor({ values, onChange }) {
+  const [text, setText] = useState(values.join(", "));
+  useEffect(() => { setText(values.join(", ")); }, [values]);
+  const apply = () => {
+    const parsed = text.split(/[,;\s]+/).map(Number).filter((n) => !isNaN(n) && n >= 0);
+    if (parsed.length > 0) onChange(parsed);
+  };
+  return (
+    <div>
+      <label style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "var(--dim)", fontFamily: "var(--mono)", display: "block", marginBottom: 4 }}>
+        Przepustowość historyczna (items/sprint)
+      </label>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input
+          value={text} onChange={(e) => setText(e.target.value)} onBlur={apply} onKeyDown={(e) => e.key === "Enter" && apply()}
+          style={{ flex: 1, background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", color: "var(--text)", fontFamily: "var(--mono)", fontSize: 13 }}
+          placeholder="np. 3, 6, 6, 2, 2"
+        />
+      </div>
+      <div style={{ fontSize: 10, color: "var(--dim)", marginTop: 3, fontFamily: "var(--mono)" }}>
+        Średnia: {(values.reduce((a, b) => a + b, 0) / values.length).toFixed(1)} · Min: {Math.min(...values)} · Max: {Math.max(...values)} · Próbek: {values.length}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Percentile Bar ─── */
+function PercentileBar({ percentiles, color }) {
+  const marks = [50, 70, 85, 95];
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+      {marks.map((p) => (
+        <div key={p} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 14px", textAlign: "center", minWidth: 80 }}>
+          <div style={{ fontSize: 10, color: "var(--dim)", fontFamily: "var(--mono)", textTransform: "uppercase" }}>P{p}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color, fontFamily: "var(--display)" }}>{percentiles[p]}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── MAIN ─── */
+export default function MonteCarloDashboard() {
+  const [backlogSize, setBacklogSize] = useState(30);
+  const [backlogPercent, setBacklogPercent] = useState(100);
+  const [probability, setProbability] = useState(85);
+  const [throughput, setThroughput] = useState(DEFAULT_THROUGHPUT);
+  const [targetDateStr, setTargetDateStr] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 4); return fmtISO(d);
+  });
+  const [activeTab, setActiveTab] = useState("when");
+
+  const startDate = useMemo(() => new Date(), []);
+  const targetDate = useMemo(() => new Date(targetDateStr + "T00:00:00"), [targetDateStr]);
+
+  /* Build sprint calendar */
+  const [sprintCalendar, setSprintCalendar] = useState(() => {
+    const sprints = [];
+    const s = new Date();
+    for (let i = 0; i < 30; i++) {
+      const start = new Date(s);
+      start.setDate(start.getDate() + i * 14);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 13);
+      sprints.push({ start, end, capacity: 100, focus: 100 });
+    }
+    return sprints;
+  });
+
+  const updateSprint = useCallback((idx, field, val) => {
+    setSprintCalendar((prev) => prev.map((sp, i) => (i === idx ? { ...sp, [field]: val } : sp)));
+  }, []);
+
+  const effectiveBacklog = Math.ceil(backlogSize * (backlogPercent / 100));
+
+  /* Monte Carlo: WHEN */
+  const whenResults = useMemo(() => {
+    return runMonteCarloWhen(effectiveBacklog, throughput, NUM_SIMS, sprintCalendar, startDate);
+  }, [effectiveBacklog, throughput, sprintCalendar, startDate]);
+
+  const whenDateAtProb = useMemo(() => {
+    const r = getPercentile(whenResults, probability);
+    return r.endDate;
+  }, [whenResults, probability]);
+
+  const whenDateAt85 = useMemo(() => {
+    const items85 = Math.ceil(backlogSize * 0.85);
+    const r85 = runMonteCarloWhen(items85, throughput, NUM_SIMS, sprintCalendar, startDate);
+    return getPercentile(r85, 85).endDate;
+  }, [backlogSize, throughput, sprintCalendar, startDate]);
+
+  const whenHistData = useMemo(() => {
+    const days = whenResults.map((r) => r.days);
+    return buildHistogram(days, 25);
+  }, [whenResults]);
+
+  const whenPercentiles = useMemo(() => {
+    const ps = {};
+    [50, 70, 85, 95].forEach((p) => { ps[p] = fmt(getPercentile(whenResults, p).endDate); });
+    return ps;
+  }, [whenResults]);
+
+  /* Monte Carlo: HOW MANY */
+  const howManyResults = useMemo(() => {
+    return runMonteCarloHowMany(targetDate, throughput, NUM_SIMS, sprintCalendar, startDate);
+  }, [targetDate, throughput, sprintCalendar, startDate]);
+
+  const howManyAtProb = useMemo(() => getPercentile(howManyResults, probability), [howManyResults, probability]);
+
+  const howManyHistData = useMemo(() => buildHistogram(howManyResults, 25), [howManyResults]);
+
+  const howManyPercentiles = useMemo(() => {
+    const ps = {};
+    [50, 70, 85, 95].forEach((p) => { ps[p] = getPercentile(howManyResults, p); });
+    return ps;
+  }, [howManyResults]);
+
+  /* ─── STYLES ─── */
+  const css = `
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap');
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --dim: #7d8590;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+      --accent3: #f78166;
+      --muted: #21262d;
+      --input-bg: #0d1117;
+      --display: 'Space Grotesk', sans-serif;
+      --body: 'DM Sans', sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+      --tab-active: #58a6ff;
+      --tab-inactive: #30363d;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    input[type="range"] { height: 4px; }
+    input[type="range"]::-webkit-slider-thumb { cursor: pointer; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  `;
+
+  const tabs = [
+    { id: "when", label: "📅 Kiedy skończymy?", color: "var(--accent)" },
+    { id: "howmany", label: "📊 Ile zrobimy?", color: "var(--accent2)" },
+    { id: "calendar", label: "🗓️ Kalendarz sprintów", color: "var(--accent3)" },
+  ];
+
+  return (
+    <div style={{ fontFamily: "var(--body)", background: "var(--bg)", color: "var(--text)", minHeight: "100vh", padding: "24px 20px" }}>
+      <style>{css}</style>
+
+      {/* Header */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <div style={{ width: 8, height: 32, background: "var(--accent)", borderRadius: 4 }} />
+          <h1 style={{ fontFamily: "var(--display)", fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>Monte Carlo Forecast</h1>
+        </div>
+        <p style={{ color: "var(--dim)", fontFamily: "var(--mono)", fontSize: 11, marginLeft: 18, letterSpacing: 0.5 }}>
+          ASTRA · {NUM_SIMS.toLocaleString()} symulacji · dane historyczne z {throughput.length} sprintów
+        </p>
+      </div>
+
+      {/* Controls Panel */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 18 }}>
+          <SliderInput label="Elementy w backlogu" value={backlogSize} onChange={setBacklogSize} min={1} max={200} />
+          <SliderInput label="% backlogu do prognozy" value={backlogPercent} onChange={setBacklogPercent} min={10} max={100} unit="%" />
+          <div style={{ fontSize: 11, color: "var(--dim)", fontFamily: "var(--mono)", background: "var(--muted)", borderRadius: 6, padding: "6px 10px", marginTop: 4 }}>
+            Prognozowane elementy: <strong style={{ color: "var(--text)" }}>{effectiveBacklog}</strong> z {backlogSize}
+          </div>
+        </div>
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 18 }}>
+          <SliderInput label="Prawdopodobieństwo prognozy" value={probability} onChange={setProbability} min={50} max={99} unit="%" />
+          <ThroughputEditor values={throughput} onChange={setThroughput} />
+          <div style={{ marginTop: 12 }}>
+            <label style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "var(--dim)", fontFamily: "var(--mono)", display: "block", marginBottom: 4 }}>
+              Data docelowa (dla "Ile zrobimy?")
+            </label>
+            <input
+              type="date" value={targetDateStr} onChange={(e) => setTargetDateStr(e.target.value)}
+              style={{ background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", color: "var(--text)", fontFamily: "var(--mono)", fontSize: 13 }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+        {tabs.map((t) => (
+          <button
+            key={t.id} onClick={() => setActiveTab(t.id)}
+            style={{
+              fontFamily: "var(--mono)", fontSize: 12, padding: "10px 18px", border: "1px solid",
+              borderColor: activeTab === t.id ? t.color : "var(--tab-inactive)",
+              background: activeTab === t.id ? t.color + "18" : "transparent",
+              color: activeTab === t.id ? t.color : "var(--dim)",
+              borderRadius: 8, cursor: "pointer", fontWeight: activeTab === t.id ? 600 : 400,
+              transition: "all 0.2s",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* TAB: WHEN */}
+      {activeTab === "when" && (
+        <div>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+            <StatCard icon="🎯" title={`${backlogPercent}% backlogu @ P${probability}`} value={fmt(whenDateAtProb)} sub={`${getPercentile(whenResults, probability).sprints} sprintów`} color="var(--accent)" />
+            <StatCard icon="📌" title="85% backlogu @ P85" value={fmt(whenDateAt85)} sub={`${Math.ceil(backlogSize * 0.85)} elementów`} color="var(--accent2)" />
+            <StatCard icon="⚡" title="Najlepszy scenariusz" value={fmt(whenResults[0].endDate)} sub={`${whenResults[0].sprints} sprintów (P1)`} color="var(--accent3)" />
+          </div>
+
+          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
+            <h3 style={{ fontFamily: "var(--display)", fontSize: 15, marginBottom: 4 }}>Rozkład wyników – dni do ukończenia {effectiveBacklog} elementów</h3>
+            <p style={{ fontSize: 11, color: "var(--dim)", fontFamily: "var(--mono)", marginBottom: 8 }}>
+              Podświetlenie: P{probability} = {getPercentile(whenResults, probability).days} dni
+            </p>
+            <Histogram data={whenHistData} highlight={getPercentile(whenResults, probability).days} label="dni" color="var(--accent)" />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--dim)", fontFamily: "var(--mono)", marginTop: 4 }}>
+              <span>{whenResults[0].days}d</span>
+              <span>{whenResults[whenResults.length - 1].days}d</span>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
+            <h4 style={{ fontFamily: "var(--display)", fontSize: 13, marginBottom: 6 }}>Percentyle – daty ukończenia</h4>
+            <PercentileBar percentiles={whenPercentiles} color="var(--accent)" />
+          </div>
+        </div>
+      )}
+
+      {/* TAB: HOW MANY */}
+      {activeTab === "howmany" && (
+        <div>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+            <StatCard icon="📊" title={`Ukończymy do ${fmt(targetDate)} @ P${probability}`} value={`${howManyAtProb} items`} sub={`z ${effectiveBacklog} w backlogu`} color="var(--accent2)" />
+            <StatCard icon="✅" title="Mediana (P50)" value={`${getPercentile(howManyResults, 50)} items`} sub="50% szans na tyle lub więcej" color="var(--accent)" />
+            <StatCard icon="🛡️" title="Bezpieczna est. (P95)" value={`${getPercentile(howManyResults, 95)} items`} sub="95% szans" color="var(--accent3)" />
+          </div>
+
+          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
+            <h3 style={{ fontFamily: "var(--display)", fontSize: 15, marginBottom: 4 }}>Rozkład – ile elementów ukończymy do {fmt(targetDate)}</h3>
+            <p style={{ fontSize: 11, color: "var(--dim)", fontFamily: "var(--mono)", marginBottom: 8 }}>
+              Podświetlenie: P{probability} = {howManyAtProb} elementów
+            </p>
+            <Histogram data={howManyHistData} highlight={howManyAtProb} label="items" color="var(--accent2)" />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--dim)", fontFamily: "var(--mono)", marginTop: 4 }}>
+              <span>{howManyResults[0]}</span>
+              <span>{howManyResults[howManyResults.length - 1]}</span>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
+            <h4 style={{ fontFamily: "var(--display)", fontSize: 13, marginBottom: 6 }}>Percentyle – liczba ukończonych elementów</h4>
+            <PercentileBar percentiles={howManyPercentiles} color="var(--accent2)" />
+          </div>
+        </div>
+      )}
+
+      {/* TAB: CALENDAR */}
+      {activeTab === "calendar" && (
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div>
+              <h3 style={{ fontFamily: "var(--display)", fontSize: 15 }}>Kalendarz sprintów</h3>
+              <p style={{ fontSize: 11, color: "var(--dim)", fontFamily: "var(--mono)" }}>
+                Dostosuj capacity (dostępność zespołu) i focus (skupienie na produkcie) – symulacja aktualizuje się automatycznie
+              </p>
+            </div>
+            <button
+              onClick={() => setSprintCalendar((prev) => prev.map((sp) => ({ ...sp, capacity: 100, focus: 100 })))}
+              style={{ fontFamily: "var(--mono)", fontSize: 11, padding: "6px 14px", background: "var(--muted)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--dim)", cursor: "pointer" }}
+            >
+              Reset all →100%
+            </button>
+          </div>
+          <SprintCalendar sprints={sprintCalendar} onChange={updateSprint} />
+        </div>
+      )}
+
+      {/* Footer */}
+      <div style={{ marginTop: 28, padding: "14px 0", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 10, color: "var(--dim)", fontFamily: "var(--mono)" }}>
+          Monte Carlo · {NUM_SIMS.toLocaleString()} symulacji · Sprinty 2-tygodniowe · Dane: Astra backlog
+        </span>
+        <span style={{ fontSize: 10, color: "var(--dim)", fontFamily: "var(--mono)" }}>
+          Backlog: {effectiveBacklog} el. · Throughput: {throughput.join(", ")} items/sprint
+        </span>
+      </div>
+    </div>
+  );
+}
