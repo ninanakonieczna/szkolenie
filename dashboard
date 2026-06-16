@@ -1,793 +1,1182 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Monte Carlo Forecast – ASTRA</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Agile Analytics Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
-:root {
-  --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #e6edf3;
-  --dim: #7d8590; --accent: #58a6ff; --accent2: #3fb950; --accent3: #f78166;
-  --accent4: #d2a8ff; --muted: #21262d; --input-bg: #0d1117;
-  --display: 'Space Grotesk', sans-serif; --body: 'DM Sans', sans-serif;
-  --mono: 'JetBrains Mono', monospace;
-}
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--body); background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px 20px; }
-input[type="range"] { height: 4px; accent-color: var(--accent); width: 100%; cursor: pointer; }
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-.header { margin-bottom: 28px; }
-.header-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-.header-bar { width: 8px; height: 32px; background: var(--accent); border-radius: 4px; }
-.header h1 { font-family: var(--display); font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
-.header-sub { color: var(--dim); font-family: var(--mono); font-size: 11px; margin-left: 18px; letter-spacing: 0.5px; }
-
-.controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-.control-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
-.slider-group { margin-bottom: 14px; }
-.slider-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
-.slider-label { font-size: 12px; color: var(--dim); font-family: var(--mono); text-transform: uppercase; letter-spacing: 1px; }
-.slider-value { font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--mono); }
-.info-box { font-size: 11px; color: var(--dim); font-family: var(--mono); background: var(--muted); border-radius: 6px; padding: 6px 10px; margin-top: 4px; }
-.info-box strong { color: var(--text); }
-.field-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); font-family: var(--mono); display: block; margin-bottom: 4px; }
-.text-input, .date-input {
-  background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;
-  padding: 7px 10px; color: var(--text); font-family: var(--mono); font-size: 13px; width: 100%;
-}
-.throughput-stats { font-size: 10px; color: var(--dim); margin-top: 3px; font-family: var(--mono); }
-.mt-12 { margin-top: 12px; }
-.mt-16 { margin-top: 16px; }
-.mb-16 { margin-bottom: 16px; }
-
-.tabs { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
-.tab-btn {
-  font-family: var(--mono); font-size: 12px; padding: 10px 18px;
-  border: 1px solid var(--border); background: transparent; color: var(--dim);
-  border-radius: 8px; cursor: pointer; font-weight: 400; transition: all 0.2s;
-}
-.tab-btn.active-when { border-color: var(--accent); background: rgba(88,166,255,0.09); color: var(--accent); font-weight: 600; }
-.tab-btn.active-howmany { border-color: var(--accent2); background: rgba(63,185,80,0.09); color: var(--accent2); font-weight: 600; }
-.tab-btn.active-calendar { border-color: var(--accent3); background: rgba(247,129,102,0.09); color: var(--accent3); font-weight: 600; }
-.tab-btn.active-epics { border-color: var(--accent4); background: rgba(210,168,255,0.09); color: var(--accent4); font-weight: 600; }
-
-.stat-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
-.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; flex: 1; min-width: 200px; }
-.stat-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--dim); font-family: var(--mono); margin-bottom: 6px; }
-.stat-value { font-size: 28px; font-weight: 700; font-family: var(--display); line-height: 1.1; }
-.stat-sub { font-size: 12px; color: var(--dim); margin-top: 4px; font-family: var(--mono); }
-
-.chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
-.chart-card h3 { font-family: var(--display); font-size: 15px; margin-bottom: 4px; }
-.chart-sub { font-size: 11px; color: var(--dim); font-family: var(--mono); margin-bottom: 8px; }
-.histogram { display: flex; align-items: flex-end; gap: 1px; height: 120px; margin-top: 8px; }
-.hist-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
-.hist-bar { width: 100%; border-radius: 2px 2px 0 0; transition: height 0.3s; }
-.hist-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); font-family: var(--mono); margin-top: 4px; }
-
-.pct-card { margin-top: 16px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
-.pct-card h4 { font-family: var(--display); font-size: 13px; margin-bottom: 6px; }
-.pct-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.pct-item { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; text-align: center; min-width: 80px; }
-.pct-label { font-size: 10px; color: var(--dim); font-family: var(--mono); text-transform: uppercase; }
-.pct-value { font-size: 16px; font-weight: 700; font-family: var(--display); }
-
-.cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
-.cal-header h3 { font-family: var(--display); font-size: 15px; }
-.cal-header p { font-size: 11px; color: var(--dim); font-family: var(--mono); }
-.reset-btn, .action-btn {
-  font-family: var(--mono); font-size: 11px; padding: 6px 14px;
-  background: var(--muted); border: 1px solid var(--border); border-radius: 6px;
-  color: var(--dim); cursor: pointer; transition: all 0.15s;
-}
-.reset-btn:hover, .action-btn:hover { color: var(--text); border-color: var(--dim); }
-.action-btn.add { border-color: var(--accent2); color: var(--accent2); }
-.action-btn.add:hover { background: rgba(63,185,80,0.12); }
-.action-btn.remove { border-color: var(--accent3); color: var(--accent3); font-size: 10px; padding: 3px 8px; }
-.action-btn.remove:hover { background: rgba(247,129,102,0.12); }
-
-.cal-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
-.cal-table th {
-  padding: 8px 6px; text-align: left; color: var(--dim);
-  text-transform: uppercase; letter-spacing: 1px; font-size: 10px;
-  border-bottom: 2px solid var(--border);
-}
-.cal-table th.center { text-align: center; }
-.cal-table td { padding: 6px; border-bottom: 1px solid var(--border); }
-.cal-table td.center { text-align: center; }
-.cal-table tr.low-eff { background: rgba(255,140,0,0.06); }
-.cal-input {
-  width: 52px; text-align: center; background: var(--input-bg);
-  border: 1px solid var(--border); border-radius: 4px; padding: 3px 4px;
-  color: var(--text); font-family: var(--mono); font-size: 12px;
-}
-.cal-input.wide { width: 140px; text-align: left; }
-.eff-high { font-weight: 600; color: #27ae60; }
-.eff-mid { font-weight: 600; color: #f39c12; }
-.eff-low { font-weight: 600; color: #e74c3c; }
-
-.footer {
-  margin-top: 28px; padding: 14px 0; border-top: 1px solid var(--border);
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: 10px; color: var(--dim); font-family: var(--mono); flex-wrap: wrap; gap: 8px;
-}
-.tab-content { display: none; }
-.tab-content.active { display: block; }
-
-/* Epic-specific */
-.epic-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
-.epic-table th {
-  padding: 8px 6px; text-align: left; color: var(--dim);
-  text-transform: uppercase; letter-spacing: 1px; font-size: 10px;
-  border-bottom: 2px solid var(--border);
-}
-.epic-table th.center { text-align: center; }
-.epic-table td { padding: 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-.epic-table td.center { text-align: center; }
-.epic-input { width: 48px; text-align: center; background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; padding: 3px 4px; color: var(--text); font-family: var(--mono); font-size: 12px; }
-.epic-input.name { width: 160px; text-align: left; }
-.epic-result-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 16px; }
-.epic-result-card { background: var(--muted); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-.epic-result-card .epic-name { font-family: var(--display); font-size: 14px; font-weight: 600; margin-bottom: 6px; }
-.epic-result-card .epic-detail { font-size: 11px; font-family: var(--mono); color: var(--dim); margin-bottom: 3px; }
-.epic-result-card .epic-date { font-size: 20px; font-weight: 700; font-family: var(--display); }
-.risk-green { color: var(--accent2); }
-.risk-yellow { color: #f0c040; }
-.risk-red { color: var(--accent3); }
-
-.section-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
-
-@media (max-width: 768px) {
-  .controls-grid { grid-template-columns: 1fr; }
-  .stat-row { flex-direction: column; }
-  .epic-result-row { grid-template-columns: 1fr; }
-}
+  :root {
+    --bg: #f8f9fc;
+    --surface: #ffffff;
+    --surface2: #f1f4f9;
+    --border: #dde3ed;
+    --text: #1a2033;
+    --text2: #5a6480;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --green: #2dc653;
+    --red: #e63946;
+    --orange: #f4a261;
+    --yellow: #f9c74f;
+    --purple: #7209b7;
+    --radius: 10px;
+    --shadow: 0 2px 12px rgba(67,97,238,0.07);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 16px; height: 56px; }
+  header h1 { font-size: 18px; font-weight: 700; color: var(--accent2); letter-spacing: -0.3px; }
+  .upload-btn { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .upload-btn label { background: var(--accent); color: #fff; border: none; border-radius: 7px; padding: 7px 16px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background .15s; }
+  .upload-btn label:hover { background: var(--accent2); }
+  #fileInput { display: none; }
+  #fileLabel { font-size: 12px; color: var(--text2); }
+  .tabs { display: flex; gap: 2px; padding: 0 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .tab { padding: 12px 20px; font-size: 13px; font-weight: 600; color: var(--text2); cursor: pointer; border-bottom: 3px solid transparent; transition: all .15s; white-space: nowrap; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--text); background: var(--surface2); }
+  .tab-content { display: none; padding: 20px 24px; }
+  .tab-content.active { display: block; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+  .card-title { font-size: 13px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 280px; }
+  .col2 { flex: 2; min-width: 400px; }
+  .col3 { flex: 3; min-width: 500px; }
+  .stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .stat { background: var(--surface2); border-radius: 8px; padding: 12px 18px; text-align: center; min-width: 110px; }
+  .stat .val { font-size: 22px; font-weight: 800; color: var(--accent); }
+  .stat .lbl { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  select, input[type=text], input[type=number], input[type=date] { border: 1px solid var(--border); border-radius: 7px; padding: 6px 10px; font-size: 13px; background: var(--surface); color: var(--text); outline: none; }
+  select:focus, input:focus { border-color: var(--accent); }
+  button { background: var(--accent); color: #fff; border: none; border-radius: 7px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s; }
+  button:hover { background: var(--accent2); }
+  button.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  button.secondary:hover { background: var(--border); }
+  button.danger { background: var(--red); }
+  .toggle-group { display: flex; gap: 0; border-radius: 7px; overflow: hidden; border: 1px solid var(--border); display: inline-flex; }
+  .toggle-group button { border-radius: 0; border: none; background: var(--surface2); color: var(--text2); padding: 6px 14px; font-weight: 600; }
+  .toggle-group button.active { background: var(--accent); color: #fff; }
+  .toggle-group button:hover:not(.active) { background: var(--border); color: var(--text); }
+  canvas { max-width: 100%; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--surface2); font-weight: 700; padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--border); color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr.excluded td { color: #bbb; text-decoration: line-through; }
+  .badge { display: inline-block; border-radius: 5px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+  .badge-sm { background: #d1fae5; color: #065f46; }
+  .badge-md { background: #dbeafe; color: #1e40af; }
+  .badge-lg { background: #fef3c7; color: #92400e; }
+  .badge-xl { background: #fce7f3; color: #9d174d; }
+  label { font-size: 13px; color: var(--text2); font-weight: 600; }
+  .form-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .form-row label { min-width: 160px; }
+  .section-title { font-size: 15px; font-weight: 800; color: var(--text); margin: 18px 0 10px; }
+  .hint { font-size: 11px; color: var(--text2); margin-top: 4px; }
+  .pct-toggle { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  .pct-toggle span { font-size: 12px; color: var(--text2); font-weight: 600; margin-right: 4px; }
+  .pct-btn { border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 700; border: 2px solid transparent; cursor: pointer; }
+  .pct-btn.p50 { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+  .pct-btn.p85 { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+  .pct-btn.p95 { background: #fce7f3; color: #9d174d; border-color: #f9a8d4; }
+  .pct-btn.active.p50 { background: #1e40af; color: #fff; }
+  .pct-btn.active.p85 { background: #92400e; color: #fff; }
+  .pct-btn.active.p95 { background: #9d174d; color: #fff; }
+  .corr-box { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+  .corr-chip { background: var(--surface2); border-radius: 8px; padding: 10px 16px; flex: 1; min-width: 160px; }
+  .corr-chip .val { font-size: 18px; font-weight: 800; }
+  .corr-chip .lbl { font-size: 11px; color: var(--text2); }
+  .xmr-signal { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .xmr-signal label { font-size: 12px; font-weight: 600; color: var(--text2); display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .xmr-signal input[type=checkbox] { accent-color: var(--accent); }
+  #mc-chart-wrap, #xmr-wrap { position: relative; }
+  .sprint-table-wrap { max-height: 240px; overflow-y: auto; }
+  .epic-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+  .epic-card .epic-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .epic-card .epic-name { font-weight: 700; font-size: 14px; flex: 1; }
+  .epic-card .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+  .epic-card .form-grid label { display: block; margin-bottom: 2px; font-size: 11px; }
+  .epic-card .form-grid input, .epic-card .form-grid select { width: 100%; }
+  .epic-dep { font-size: 11px; color: var(--text2); margin-top: 6px; }
+  .understanding-sel { width: 100%; }
+  .risk-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; }
+  .risk-1 { background: #fee2e2; color: #991b1b; }
+  .risk-2 { background: #fef3c7; color: #92400e; }
+  .risk-3 { background: #d1fae5; color: #065f46; }
+  .risk-4 { background: #dbeafe; color: #1e40af; }
+  .epic-result { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-top: 8px; font-size: 13px; }
+  .progress-bar-wrap { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .progress-bar { height: 100%; border-radius: 4px; background: var(--accent); }
+  .date-range { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .no-data { text-align: center; color: var(--text2); padding: 40px 0; font-size: 14px; }
+  .signal-legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  .signal-legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+  .signal-legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .add-item-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .add-item-row input, .add-item-row select { flex: 1; min-width: 100px; }
+  .add-item-row label { font-size: 11px; color: var(--text2); display: block; margin-bottom: 2px; }
+  .add-item-row .field { display: flex; flex-direction: column; }
+  #epic-timeline-canvas { width: 100% !important; }
+  .mc-result-box { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+  .mc-res { background: var(--surface2); border-radius: 8px; padding: 12px 16px; }
+  .mc-res .val { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .mc-res .lbl { font-size: 11px; color: var(--text2); margin-top: 2px; }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="header-row">
-    <div class="header-bar"></div>
-    <h1>Monte Carlo Forecast</h1>
+<header>
+  <h1>📊 Agile Analytics</h1>
+  <div class="upload-btn">
+    <label for="fileInput">⬆ Upload CSV/JSON</label>
+    <input type="file" id="fileInput" accept=".csv,.json">
+    <span id="fileLabel">No file loaded</span>
   </div>
-  <p class="header-sub" id="headerSub">ASTRA · 10 000 symulacji</p>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab(0)">Scatter & Percentiles</div>
+  <div class="tab" onclick="switchTab(1)">XMR Control</div>
+  <div class="tab" onclick="switchTab(2)">Monte Carlo</div>
+  <div class="tab" onclick="switchTab(3)">Estimate the Unknown</div>
 </div>
 
-<!-- ═══════ GLOBAL CONTROLS ═══════ -->
-<div class="controls-grid">
-  <div class="control-panel">
-    <div class="slider-group">
-      <div class="slider-header">
-        <span class="slider-label">Elementy w backlogu</span>
-        <span class="slider-value" id="backlogVal">30</span>
-      </div>
-      <input type="range" id="backlogSlider" min="1" max="200" value="30">
+<!-- ===== TAB 1 ===== -->
+<div class="tab-content active" id="tab0">
+  <div class="row" style="margin-bottom:14px;align-items:center;">
+    <div class="date-range">
+      <label>From:</label><input type="date" id="filterFrom">
+      <label>To:</label><input type="date" id="filterTo">
+      <button onclick="applyDateFilter()">Apply</button>
+      <button class="secondary" onclick="clearDateFilter()">Clear</button>
     </div>
-    <div class="slider-group">
-      <div class="slider-header">
-        <span class="slider-label">% backlogu do prognozy</span>
-        <span class="slider-value" id="backlogPctVal">100%</span>
-      </div>
-      <input type="range" id="backlogPctSlider" min="10" max="100" value="100">
+    <div class="pct-toggle" style="margin-left:auto;">
+      <span>Highlight:</span>
+      <button class="pct-btn p50 active" onclick="setPctHighlight('p50',this)">P50</button>
+      <button class="pct-btn p85" onclick="setPctHighlight('p85',this)">P85</button>
+      <button class="pct-btn p95" onclick="setPctHighlight('p95',this)">P95</button>
+      <button class="pct-btn secondary" style="border-radius:20px;padding:4px 14px;font-size:12px;font-weight:700;" onclick="setPctHighlight('none',this)">None</button>
     </div>
-    <div class="info-box">Prognozowane elementy: <strong id="effectiveBacklogDisp">30</strong> z <span id="totalBacklogDisp">30</span></div>
   </div>
-  <div class="control-panel">
-    <div class="slider-group">
-      <div class="slider-header">
-        <span class="slider-label">Prawdopodobieństwo prognozy</span>
-        <span class="slider-value" id="probVal">85%</span>
+
+  <div class="row" style="margin-bottom:14px;">
+    <div class="stat-row" id="pctStats"></div>
+  </div>
+
+  <div class="row" style="margin-bottom:16px;">
+    <div class="col2 card">
+      <div class="card-title">Lead Time Scatter (creation → end)</div>
+      <canvas id="leadChart" height="220"></canvas>
+    </div>
+    <div class="col2 card">
+      <div class="card-title">Cycle Time Scatter (start → end)</div>
+      <canvas id="cycleChart" height="220"></canvas>
+    </div>
+  </div>
+
+  <div class="row" style="margin-bottom:16px;">
+    <div class="col card">
+      <div class="card-title">Correlations</div>
+      <div class="corr-box">
+        <div class="corr-chip"><div class="val" id="corrLC">—</div><div class="lbl">Lead ↔ Cycle Time</div></div>
+        <div class="corr-chip"><div class="val" id="corrCS">—</div><div class="lbl">Cycle Time ↔ Story Points</div></div>
       </div>
-      <input type="range" id="probSlider" min="50" max="99" value="85">
+    </div>
+    <div class="col card">
+      <div class="card-title">Size Legend</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+        <span class="badge badge-sm">● Small &lt;3d</span>
+        <span class="badge badge-md">● Medium 3-5d</span>
+        <span class="badge badge-lg">● Large 5-10d</span>
+        <span class="badge badge-xl">● XL &gt;10d</span>
+      </div>
+      <div class="hint" style="margin-top:8px;">Click any point on the charts to toggle exclude/include. Excluded items are greyed out and removed from percentile analysis.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Items</div>
+    <div style="overflow-x:auto;">
+      <table id="itemsTable">
+        <thead><tr>
+          <th>Name</th><th>Created</th><th>Started</th><th>Completed</th>
+          <th>Lead (d)</th><th>Cycle (d)</th><th>SP</th><th>Size</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="itemsBody"></tbody>
+      </table>
+    </div>
+    <div class="add-item-row">
+      <div class="field"><label>Name</label><input type="text" id="addName" placeholder="Item name"></div>
+      <div class="field"><label>Created</label><input type="date" id="addCreated"></div>
+      <div class="field"><label>Started</label><input type="date" id="addStarted"></div>
+      <div class="field"><label>Completed</label><input type="date" id="addCompleted"></div>
+      <div class="field"><label>Story Pts</label><input type="number" id="addSP" min="0" value="1"></div>
+      <div class="field" style="justify-content:flex-end;"><button onclick="addItem()">+ Add</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 2 ===== -->
+<div class="tab-content" id="tab1">
+  <div class="row" style="margin-bottom:14px;align-items:center;flex-wrap:wrap;gap:14px;">
+    <div>
+      <label style="margin-right:6px;">Show:</label>
+      <div class="toggle-group">
+        <button class="active" onclick="setXmrView('cycle',this)">Cycle Time</button>
+        <button onclick="setXmrView('lead',this)">Lead Time</button>
+      </div>
     </div>
     <div>
-      <label class="field-label">Przepustowość historyczna (items/sprint)</label>
-      <input type="text" class="text-input" id="throughputInput" value="3, 6, 6, 2, 2">
-      <div class="throughput-stats" id="throughputStats"></div>
-    </div>
-    <div class="mt-12">
-      <label class="field-label">Data docelowa (dla "Ile zrobimy?")</label>
-      <input type="date" class="date-input" id="targetDateInput">
-    </div>
-  </div>
-</div>
-
-<!-- ═══════ TABS ═══════ -->
-<div class="tabs">
-  <button class="tab-btn active-when" id="tabWhen" onclick="switchTab('when')">📅 Kiedy skończymy?</button>
-  <button class="tab-btn" id="tabHowmany" onclick="switchTab('howmany')">📊 Ile zrobimy?</button>
-  <button class="tab-btn" id="tabCalendar" onclick="switchTab('calendar')">🗓️ Kalendarz sprintów</button>
-  <button class="tab-btn" id="tabEpics" onclick="switchTab('epics')">🏔️ Epiki</button>
-</div>
-
-<!-- ═══════ TAB: WHEN ═══════ -->
-<div class="tab-content active" id="panelWhen">
-  <div class="stat-row">
-    <div class="stat-card"><div class="stat-title" id="whenTitle1">🎯 100% BACKLOGU @ P85</div><div class="stat-value" style="color:var(--accent)" id="whenVal1">–</div><div class="stat-sub" id="whenSub1"></div></div>
-    <div class="stat-card"><div class="stat-title">📌 85% BACKLOGU @ P85</div><div class="stat-value" style="color:var(--accent2)" id="whenVal2">–</div><div class="stat-sub" id="whenSub2"></div></div>
-    <div class="stat-card"><div class="stat-title">⚡ NAJLEPSZY SCENARIUSZ</div><div class="stat-value" style="color:var(--accent3)" id="whenVal3">–</div><div class="stat-sub" id="whenSub3"></div></div>
-  </div>
-  <div class="chart-card">
-    <h3 id="whenChartTitle">Rozkład wyników</h3>
-    <p class="chart-sub" id="whenChartSub"></p>
-    <div class="histogram" id="whenHistogram"></div>
-    <div class="hist-axis"><span id="whenAxisMin"></span><span id="whenAxisMax"></span></div>
-  </div>
-  <div class="pct-card"><h4>Percentyle – daty ukończenia</h4><div class="pct-row" id="whenPercentiles"></div></div>
-</div>
-
-<!-- ═══════ TAB: HOW MANY ═══════ -->
-<div class="tab-content" id="panelHowmany">
-  <div class="stat-row">
-    <div class="stat-card"><div class="stat-title" id="hmTitle1">📊 UKOŃCZYMY @ P85</div><div class="stat-value" style="color:var(--accent2)" id="hmVal1">–</div><div class="stat-sub" id="hmSub1"></div></div>
-    <div class="stat-card"><div class="stat-title">✅ MEDIANA (P50)</div><div class="stat-value" style="color:var(--accent)" id="hmVal2">–</div><div class="stat-sub">50% szans na tyle lub więcej</div></div>
-    <div class="stat-card"><div class="stat-title">🛡️ BEZPIECZNA EST. (P95)</div><div class="stat-value" style="color:var(--accent3)" id="hmVal3">–</div><div class="stat-sub">95% szans</div></div>
-  </div>
-  <div class="chart-card">
-    <h3 id="hmChartTitle">Rozkład</h3>
-    <p class="chart-sub" id="hmChartSub"></p>
-    <div class="histogram" id="hmHistogram"></div>
-    <div class="hist-axis"><span id="hmAxisMin"></span><span id="hmAxisMax"></span></div>
-  </div>
-  <div class="pct-card"><h4>Percentyle – liczba ukończonych elementów</h4><div class="pct-row" id="hmPercentiles"></div></div>
-</div>
-
-<!-- ═══════ TAB: CALENDAR ═══════ -->
-<div class="tab-content" id="panelCalendar">
-  <div class="chart-card">
-    <div class="cal-header">
-      <div><h3>Kalendarz sprintów</h3><p>Dostosuj capacity i focus – symulacja aktualizuje się automatycznie</p></div>
-      <button class="reset-btn" onclick="resetCalendar()">Reset all → 100%</button>
-    </div>
-    <div style="overflow-x:auto">
-      <table class="cal-table"><thead><tr>
-        <th>Sprint</th><th>Daty</th><th class="center">Capacity %</th><th class="center">Focus %</th><th class="center">Efekt</th>
-      </tr></thead><tbody id="calendarBody"></tbody></table>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════ TAB: EPICS ═══════ -->
-<div class="tab-content" id="panelEpics">
-
-  <!-- Epic Controls -->
-  <div class="controls-grid mb-16">
-    <div class="control-panel">
-      <div class="slider-group">
-        <div class="slider-header">
-          <span class="slider-label">Prawdopodobieństwo (epiki)</span>
-          <span class="slider-value" id="epicProbVal">85%</span>
-        </div>
-        <input type="range" id="epicProbSlider" min="50" max="99" value="85">
-      </div>
-      <div class="slider-group">
-        <div class="slider-header">
-          <span class="slider-label">Focus na projekcie (%)</span>
-          <span class="slider-value" id="epicFocusVal">75%</span>
-        </div>
-        <input type="range" id="epicFocusSlider" min="10" max="100" value="75">
-      </div>
-      <div class="mt-12">
-        <label class="field-label">Przepustowość historyczna epików (stories/sprint)</label>
-        <input type="text" class="text-input" id="epicTpInput" value="3, 4, 5, 4, 2, 7, 4, 5">
-        <div class="throughput-stats" id="epicTpStats"></div>
-      </div>
-    </div>
-    <div class="control-panel">
-      <div>
-        <label class="field-label">Data początkowa</label>
-        <input type="date" class="date-input" id="epicStartDate" value="2026-06-01">
-      </div>
-      <div class="mt-12">
-        <label class="field-label">Data docelowa</label>
-        <input type="date" class="date-input" id="epicTargetDate" value="2026-09-30">
-      </div>
-      <div class="info-box mt-12" id="epicInfoBox">
-        Sprint: 2-tygodniowy · Lipiec: domyślnie obniżona capacity
+      <span style="font-size:12px;font-weight:700;color:var(--text2);margin-right:8px;">Signals:</span>
+      <div class="xmr-signal">
+        <label><input type="checkbox" id="sig1" checked onchange="renderXmr()"> Rule 1: Beyond limits</label>
+        <label><input type="checkbox" id="sig2" onchange="renderXmr()"> Rule 2: 8+ on same side</label>
+        <label><input type="checkbox" id="sig3" onchange="renderXmr()"> Rule 3: 3+ of 4 near limit</label>
+        <label><input type="checkbox" id="sig4" onchange="renderXmr()"> Rule 4: Trend (6 consecutive)</label>
       </div>
     </div>
   </div>
 
-  <!-- Epic Sprint Calendar -->
-  <div class="chart-card mb-16">
-    <div class="cal-header">
-      <div><h3>Kalendarz sprintów – Epiki</h3><p>Lipiec ma domyślnie 60% capacity (urlopy). Edytuj dowolnie.</p></div>
-      <button class="reset-btn" onclick="resetEpicCal()">Reset defaults</button>
-    </div>
-    <div style="overflow-x:auto">
-      <table class="cal-table"><thead><tr>
-        <th>Sprint</th><th>Daty</th><th class="center">Capacity %</th><th class="center">Efekt</th>
-      </tr></thead><tbody id="epicCalBody"></tbody></table>
+  <div class="row" style="margin-bottom:16px;">
+    <div class="col card">
+      <div class="stat-row" id="xmrStats"></div>
     </div>
   </div>
 
-  <!-- Epic List -->
-  <div class="chart-card mb-16">
-    <div class="cal-header">
-      <div><h3>Lista Epików</h3><p>Podaj min/max liczbę User Stories – symulacja losuje z tego zakresu</p></div>
-      <button class="action-btn add" onclick="addEpic()">+ Dodaj epik</button>
-    </div>
-    <div style="overflow-x:auto">
-      <table class="epic-table"><thead><tr>
-        <th>Epik</th><th>Nazwa</th><th class="center">Min US</th><th class="center">Max US</th><th class="center">Estymata (śr.)</th><th class="center"></th>
-      </tr></thead><tbody id="epicListBody"></tbody></table>
-    </div>
-    <div class="info-box mt-12" id="epicTotalInfo"></div>
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-title">X Chart (Individual Values)</div>
+    <div id="xmr-wrap"><canvas id="xChart" height="160"></canvas></div>
+    <div class="signal-legend" id="signalLegend"></div>
   </div>
-
-  <!-- Epic Stats -->
-  <div class="stat-row">
-    <div class="stat-card"><div class="stat-title" id="epicStatTitle1">🏔️ WSZYSTKIE EPIKI</div><div class="stat-value" style="color:var(--accent4)" id="epicStatVal1">–</div><div class="stat-sub" id="epicStatSub1"></div></div>
-    <div class="stat-card"><div class="stat-title" id="epicStatTitle2">📊 ILE DO TERMINU</div><div class="stat-value" style="color:var(--accent2)" id="epicStatVal2">–</div><div class="stat-sub" id="epicStatSub2"></div></div>
-    <div class="stat-card"><div class="stat-title">⚡ NAJLEPSZY SCENARIUSZ</div><div class="stat-value" style="color:var(--accent3)" id="epicStatVal3">–</div><div class="stat-sub" id="epicStatSub3"></div></div>
-  </div>
-
-  <!-- Epic Histogram -->
-  <div class="chart-card">
-    <h3 id="epicChartTitle">Rozkład – dni do ukończenia wszystkich epików</h3>
-    <p class="chart-sub" id="epicChartSub"></p>
-    <div class="histogram" id="epicHistogram"></div>
-    <div class="hist-axis"><span id="epicAxisMin"></span><span id="epicAxisMax"></span></div>
-  </div>
-  <div class="pct-card"><h4>Percentyle – daty ukończenia epików</h4><div class="pct-row" id="epicPercentiles"></div></div>
-
-  <hr class="section-divider">
-
-  <!-- Per-epic results -->
-  <div class="chart-card">
-    <h3>Prognoza per Epik</h3>
-    <p class="chart-sub">Przewidywana data ukończenia każdego epiku sekwencyjnie</p>
-    <div class="epic-result-row" id="epicResults"></div>
+  <div class="card">
+    <div class="card-title">MR Chart (Moving Range)</div>
+    <canvas id="mrChart" height="130"></canvas>
   </div>
 </div>
 
-<!-- ═══════ FOOTER ═══════ -->
-<div class="footer">
-  <span id="footerLeft">Monte Carlo · 10 000 symulacji · Sprinty 2-tygodniowe · Dane: Astra</span>
-  <span id="footerRight"></span>
+<!-- ===== TAB 3 ===== -->
+<div class="tab-content" id="tab2">
+  <div class="row" style="gap:16px;flex-wrap:wrap;">
+    <div class="col card" style="min-width:260px;">
+      <div class="card-title">Settings</div>
+      <div class="form-row"><label>Backlog size:</label><input type="number" id="mcBacklog" value="50" min="1" onchange="runMonteCarlo()"></div>
+      <div class="form-row"><label>Team velocity (stories/sprint):</label><input type="number" id="mcVelocity" value="10" min="1" onchange="runMonteCarlo()"></div>
+      <div class="form-row"><label>Sprint length (days):</label><input type="number" id="mcSprintLen" value="14" min="1" onchange="runMonteCarlo()"></div>
+      <div class="form-row"><label>Start date:</label><input type="date" id="mcStart" onchange="runMonteCarlo()"></div>
+      <div class="form-row"><label>Target date:</label><input type="date" id="mcTarget" onchange="runMonteCarlo()"></div>
+      <div class="form-row"><label>Probability (%):</label><input type="number" id="mcProb" value="85" min="1" max="99" onchange="runMonteCarlo()"></div>
+      <div class="form-row"><label>% of backlog to forecast:</label><input type="number" id="mcPct" value="100" min="1" max="100" onchange="runMonteCarlo()"></div>
+      <div class="form-row"><label>Simulations:</label><input type="number" id="mcSims" value="5000" min="100" max="50000" onchange="runMonteCarlo()"></div>
+      <div class="hint">Velocity can be read from uploaded file automatically.</div>
+    </div>
+    <div class="col2">
+      <div class="card" style="margin-bottom:14px;">
+        <div class="card-title">Forecast Results</div>
+        <div class="mc-result-box" id="mcResults"></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <div class="card-title">Completion Date Distribution</div>
+        <canvas id="mcChart" height="180"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Items Completed by Target Date</div>
+        <canvas id="mcChart2" height="150"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="card-title">Sprint Calendar</div>
+    <div class="hint" style="margin-bottom:10px;">Adjust capacity and focus per sprint. Forecast updates automatically.</div>
+    <div style="overflow-x:auto;"><table id="sprintTable">
+      <thead><tr><th>#</th><th>Start</th><th>End</th><th>Capacity (%)</th><th>Focus (%)</th><th>Effective Velocity</th><th></th></tr></thead>
+      <tbody id="sprintBody"></tbody>
+    </table></div>
+    <button style="margin-top:10px;" onclick="addSprint()">+ Sprint</button>
+  </div>
+</div>
+
+<!-- ===== TAB 4 ===== -->
+<div class="tab-content" id="tab3">
+  <div class="row" style="margin-bottom:14px;align-items:center;flex-wrap:wrap;gap:14px;">
+    <div class="form-row">
+      <label>Start:</label><input type="date" id="epicStart" value="2026-07-01" onchange="renderEpics()">
+      <label>Finish:</label><input type="date" id="epicFinish" value="2026-09-30" onchange="renderEpics()">
+      <label>Focus (%):</label><input type="number" id="epicFocus" value="75" min="1" max="100" style="width:70px" onchange="renderEpics()">
+      <label>Probability (%):</label>
+      <select id="epicProb" onchange="renderEpics()">
+        <option value="50">50%</option><option value="70">70%</option>
+        <option value="85" selected>85%</option><option value="95">95%</option>
+      </select>
+      <label>Velocity (stories/sprint):</label><input type="number" id="epicVelocity" value="10" min="1" style="width:70px" onchange="renderEpics()">
+    </div>
+  </div>
+
+  <div id="epicsContainer"></div>
+  <button onclick="addEpic()" style="margin-bottom:16px;">+ Add Epic</button>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-title">Epic Timeline Forecast</div>
+    <canvas id="epic-timeline-canvas" height="220"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Forecast Summary</div>
+    <div id="epicSummary"></div>
+  </div>
 </div>
 
 <script>
-/* ═══════════════════════════════════════════════
-   GLOBAL STATE
-   ═══════════════════════════════════════════════ */
-const NUM_SIMS = 10000;
-let backlogSize = 30, backlogPercent = 100, probability = 85;
-let throughput = [3, 6, 6, 2, 2];
-let activeTab = 'when';
-const startDate = new Date();
-let targetDate = new Date(); targetDate.setMonth(targetDate.getMonth() + 4);
+// ====== GLOBAL STATE ======
+let rawItems = [];
+let items = []; // working set
+let excludedIds = new Set();
+let dateFrom = null, dateTo = null;
+let pctHighlight = 'p50';
+let xmrView = 'cycle';
+let leadChart = null, cycleChart = null, xChart = null, mrChart = null, mcChart = null, mcChart2 = null, epicChart = null;
+let sprints = [];
+let epics = [];
+let epicIdCounter = 1;
 
-// Main calendar: 30 sprints from today
-let sprintCalendar = [];
-(function() {
-  const s = new Date();
-  for (let i = 0; i < 30; i++) {
-    const st = new Date(s); st.setDate(st.getDate() + i * 14);
-    const en = new Date(st); en.setDate(en.getDate() + 13);
-    sprintCalendar.push({ start: st, end: en, capacity: 100, focus: 100 });
-  }
-})();
-
-/* ═══════ EPIC STATE ═══════ */
-let epicProb = 85;
-let epicFocus = 75;
-let epicTp = [3, 4, 5, 4, 2, 7, 4, 5];
-let epicStartDate = new Date('2026-06-01T00:00:00');
-let epicTargetDate = new Date('2026-09-30T00:00:00');
-
-let epics = [
-  { name: 'Epik 1', min: 5, max: 8 },
-  { name: 'Epik 2', min: 4, max: 7 },
-  { name: 'Epik 3', min: 6, max: 10 },
-  { name: 'Epik 4', min: 3, max: 6 },
-  { name: 'Epik 5', min: 5, max: 9 },
-  { name: 'Epik 6', min: 4, max: 8 },
+// ====== SAMPLE DATA ======
+const SAMPLE = [
+  {id:1,name:"Auth module",created:"2025-11-01",started:"2025-11-03",completed:"2025-11-12",sp:5},
+  {id:2,name:"User profile",created:"2025-11-04",started:"2025-11-05",completed:"2025-11-09",sp:3},
+  {id:3,name:"Dashboard UI",created:"2025-11-06",started:"2025-11-10",completed:"2025-11-24",sp:8},
+  {id:4,name:"API gateway",created:"2025-11-08",started:"2025-11-09",completed:"2025-11-13",sp:5},
+  {id:5,name:"Notification svc",created:"2025-11-10",started:"2025-11-15",completed:"2025-11-17",sp:2},
+  {id:6,name:"Search",created:"2025-11-12",started:"2025-11-14",completed:"2025-11-19",sp:5},
+  {id:7,name:"Report gen",created:"2025-11-14",started:"2025-11-20",completed:"2025-12-05",sp:13},
+  {id:8,name:"File upload",created:"2025-11-16",started:"2025-11-18",completed:"2025-11-21",sp:3},
+  {id:9,name:"Permissions",created:"2025-11-18",started:"2025-11-25",completed:"2025-12-03",sp:8},
+  {id:10,name:"Analytics",created:"2025-11-20",started:"2025-11-22",completed:"2025-11-29",sp:5},
+  {id:11,name:"Mobile nav",created:"2025-11-22",started:"2025-11-24",completed:"2025-11-26",sp:2},
+  {id:12,name:"Email templates",created:"2025-11-24",started:"2025-11-26",completed:"2025-11-28",sp:2},
+  {id:13,name:"Audit log",created:"2025-11-26",started:"2025-12-01",completed:"2025-12-10",sp:5},
+  {id:14,name:"Data export",created:"2025-11-28",started:"2025-12-02",completed:"2025-12-08",sp:5},
+  {id:15,name:"SSO integration",created:"2025-12-01",started:"2025-12-05",completed:"2025-12-20",sp:13},
+  {id:16,name:"Dark mode",created:"2025-12-03",started:"2025-12-04",completed:"2025-12-06",sp:2},
+  {id:17,name:"Help centre",created:"2025-12-05",started:"2025-12-08",completed:"2025-12-12",sp:3},
+  {id:18,name:"Billing",created:"2025-12-07",started:"2025-12-10",completed:"2025-12-30",sp:21},
+  {id:19,name:"Rate limiting",created:"2025-12-09",started:"2025-12-11",completed:"2025-12-15",sp:3},
+  {id:20,name:"Webhooks",created:"2025-12-11",started:"2025-12-13",completed:"2025-12-18",sp:5},
 ];
 
-// Epic sprint calendar: built from epicStartDate to epicTargetDate + buffer
-let epicCalendar = [];
-function buildEpicCalendar() {
-  epicCalendar = [];
-  const s = new Date(epicStartDate);
-  // build enough sprints to cover target + 50% buffer
-  const daySpan = Math.max(14, Math.ceil((epicTargetDate - epicStartDate) / 864e5));
-  const numSprints = Math.ceil(daySpan * 1.5 / 14);
-  for (let i = 0; i < numSprints; i++) {
-    const st = new Date(s); st.setDate(st.getDate() + i * 14);
-    const en = new Date(st); en.setDate(en.getDate() + 13);
-    // Default capacity: July gets 60%
-    let cap = 100;
-    if (st.getMonth() === 6 || en.getMonth() === 6) cap = 60; // July=6
-    epicCalendar.push({ start: st, end: en, capacity: cap });
+function daysBetween(a, b) {
+  if (!a || !b) return null;
+  return Math.max(0, Math.round((new Date(b) - new Date(a)) / 86400000));
+}
+function enrichItem(item) {
+  item.lead = daysBetween(item.created, item.completed);
+  item.cycle = daysBetween(item.started, item.completed);
+  if (item.cycle === null) item.cycle = item.lead;
+  item.sizeLabel = item.cycle < 3 ? 'sm' : item.cycle < 6 ? 'md' : item.cycle <= 10 ? 'lg' : 'xl';
+  return item;
+}
+
+// ====== FILE UPLOAD ======
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('fileLabel').textContent = file.name;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'json') {
+    const reader = new FileReader();
+    reader.onload = ev => { try { parseRaw(JSON.parse(ev.target.result)); } catch(err) { alert('JSON parse error: ' + err); } };
+    reader.readAsText(file);
+  } else {
+    Papa.parse(file, { header: true, skipEmptyLines: true, complete: r => parseRaw(r.data) });
+  }
+});
+
+function parseRaw(data) {
+  let idCounter = 1;
+  rawItems = data.map(r => {
+    // flexible field names
+    const name = r.name || r.Name || r.title || r.Title || r.summary || r.key || ('Item '+(idCounter));
+    const created = r.created || r.Created || r['Created Date'] || r.creation_date || r.start_date || null;
+    const started = r.started || r.Started || r['Start Date'] || r.in_progress || r.activated || created;
+    const completed = r.completed || r.Completed || r['Done Date'] || r['Completed Date'] || r.resolved || null;
+    const sp = parseFloat(r.sp || r.SP || r['Story Points'] || r.story_points || r.points || 0) || 0;
+    return enrichItem({ id: idCounter++, name, created: fmtDate(created), started: fmtDate(started), completed: fmtDate(completed), sp });
+  }).filter(i => i.completed);
+  items = [...rawItems];
+  // try to extract velocity for monte carlo
+  computeVelocityFromData();
+  renderAll();
+}
+
+function fmtDate(d) {
+  if (!d) return null;
+  const dt = new Date(d);
+  if (isNaN(dt)) return null;
+  return dt.toISOString().slice(0, 10);
+}
+
+function computeVelocityFromData() {
+  if (!rawItems.length) return;
+  // group by 2-week sprint ending
+  const byWeek = {};
+  rawItems.forEach(i => {
+    if (!i.completed) return;
+    const w = Math.floor(new Date(i.completed) / (14 * 86400000));
+    byWeek[w] = (byWeek[w] || 0) + 1;
+  });
+  const vals = Object.values(byWeek);
+  if (vals.length) {
+    const avg = Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
+    document.getElementById('mcVelocity').value = avg;
+    document.getElementById('epicVelocity').value = avg;
   }
 }
-buildEpicCalendar();
 
-/* ═══════════════════════════════════════════════
-   MC ENGINE
-   ═══════════════════════════════════════════════ */
-function runMCWhen(bSize, tp, n, cal, sd) {
-  const r = [];
-  for (let s = 0; s < n; s++) {
-    let rem = bSize, si = 0, td = 0;
-    while (rem > 0 && si < 200) {
-      const c = cal[si] || { capacity: 100, focus: 100 };
-      const base = tp[Math.floor(Math.random() * tp.length)];
-      const capMult = (c.capacity !== undefined ? c.capacity : 100) / 100;
-      const focMult = (c.focus !== undefined ? c.focus : 100) / 100;
-      rem -= Math.max(1, Math.round(base * capMult * focMult));
-      td += 14; si++;
+// load sample data by default
+(function loadSample() {
+  rawItems = SAMPLE.map(i => enrichItem({...i}));
+  items = [...rawItems];
+  renderAll();
+  document.getElementById('fileLabel').textContent = 'Sample data loaded';
+  // init mc start
+  document.getElementById('mcStart').value = new Date().toISOString().slice(0,10);
+  const t = new Date(); t.setMonth(t.getMonth()+3);
+  document.getElementById('mcTarget').value = t.toISOString().slice(0,10);
+})();
+
+function renderAll() {
+  renderTab1();
+  renderXmr();
+  runMonteCarlo();
+  renderEpics();
+}
+
+// ====== TAB 1 ======
+function getActiveItems() {
+  let active = items.filter(i => !excludedIds.has(i.id));
+  if (dateFrom) active = active.filter(i => i.completed >= dateFrom);
+  if (dateTo) active = active.filter(i => i.completed <= dateTo);
+  return active;
+}
+function applyDateFilter() {
+  dateFrom = document.getElementById('filterFrom').value || null;
+  dateTo = document.getElementById('filterTo').value || null;
+  renderTab1();
+}
+function clearDateFilter() {
+  dateFrom = null; dateTo = null;
+  document.getElementById('filterFrom').value = '';
+  document.getElementById('filterTo').value = '';
+  renderTab1();
+}
+function setPctHighlight(p, btn) {
+  pctHighlight = p;
+  document.querySelectorAll('.pct-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTab1();
+}
+
+function percentile(arr, p) {
+  if (!arr.length) return 0;
+  const s = [...arr].sort((a,b)=>a-b);
+  const idx = Math.ceil(p/100 * s.length) - 1;
+  return s[Math.max(0, idx)];
+}
+function pearson(xs, ys) {
+  const n = xs.length;
+  if (n < 2) return 0;
+  const mx = xs.reduce((a,b)=>a+b,0)/n, my = ys.reduce((a,b)=>a+b,0)/n;
+  let num = 0, dx = 0, dy = 0;
+  for (let i=0;i<n;i++) { num += (xs[i]-mx)*(ys[i]-my); dx += (xs[i]-mx)**2; dy += (ys[i]-my)**2; }
+  return dx && dy ? (num / Math.sqrt(dx*dy)).toFixed(3) : '—';
+}
+
+const sizeColors = { sm: '#2dc653', md: '#4361ee', lg: '#f4a261', xl: '#e63946' };
+const sizeBorderColors = { sm: '#1a8c38', md: '#1e3a8a', lg: '#c2741a', xl: '#9b1c28' };
+
+function renderTab1() {
+  const active = getActiveItems();
+  const all = items; // all for background
+
+  const leads = active.map(i => i.lead).filter(v => v !== null);
+  const cycles = active.map(i => i.cycle).filter(v => v !== null);
+  const sps = active.map(i => i.sp);
+
+  const p50l = percentile(leads, 50), p85l = percentile(leads, 85), p95l = percentile(leads, 95);
+  const p50c = percentile(cycles, 50), p85c = percentile(cycles, 85), p95c = percentile(cycles, 95);
+
+  document.getElementById('pctStats').innerHTML = `
+    <div class="stat"><div class="val" style="color:#1e40af">${p50l}d / ${p50c}d</div><div class="lbl">P50 Lead / Cycle</div></div>
+    <div class="stat"><div class="val" style="color:#92400e">${p85l}d / ${p85c}d</div><div class="lbl">P85 Lead / Cycle</div></div>
+    <div class="stat"><div class="val" style="color:#9d174d">${p95l}d / ${p95c}d</div><div class="lbl">P95 Lead / Cycle</div></div>
+    <div class="stat"><div class="val">${active.length}</div><div class="lbl">Items (active)</div></div>
+  `;
+
+  const pctVal = pctHighlight === 'p50' ? {l: p50l, c: p50c} : pctHighlight === 'p85' ? {l: p85l, c: p85c} : pctHighlight === 'p95' ? {l: p95l, c: p95c} : null;
+
+  function buildScatterData(field, pctField) {
+    // background (excluded + filtered out)
+    const bgPoints = all.filter(i => excludedIds.has(i.id) || (dateFrom && i.completed < dateFrom) || (dateTo && i.completed > dateTo)).map(i => ({
+      x: new Date(i.completed).getTime(), y: i[field], r: Math.max(4, Math.min(20, (i.sp||1)*2)),
+      _item: i
+    }));
+    // active items
+    const fgPoints = active.map(i => ({
+      x: new Date(i.completed).getTime(), y: i[field], r: Math.max(4, Math.min(20, (i.sp||1)*2)),
+      _item: i
+    }));
+    // split by percentile highlight
+    if (!pctVal) return { fg: fgPoints, fgHi: [], bg: bgPoints };
+    const pv = field === 'lead' ? pctVal.l : pctVal.c;
+    return {
+      fgHi: fgPoints.filter(p => p.y <= pv),
+      fg: fgPoints.filter(p => p.y > pv),
+      bg: bgPoints
+    };
+  }
+
+  function buildChart(canvasId, existingChart, field, label, pctF) {
+    const data = buildScatterData(field, pctF);
+    const pv = pctVal ? (field === 'lead' ? pctVal.l : pctVal.c) : null;
+    const minDate = active.length ? Math.min(...active.map(i => new Date(i.completed).getTime())) : Date.now() - 30*86400000;
+    const maxDate = active.length ? Math.max(...active.map(i => new Date(i.completed).getTime())) : Date.now();
+
+    const makeDs = (pts, alpha, border) => ({
+      data: pts, pointRadius: pts.map(p => p.r), pointHoverRadius: pts.map(p => p.r+2),
+      backgroundColor: pts.map(p => hexA(sizeColors[p._item.sizeLabel], alpha)),
+      borderColor: pts.map(p => hexA(sizeBorderColors[p._item.sizeLabel], border)),
+      borderWidth: 1.5
+    });
+
+    const datasets = [
+      { label: 'Background', ...makeDs([...data.bg, ...data.fg], 0.18, 0.2) },
+      { label: label + ' (below P)', ...makeDs(data.fgHi || data.fg, pctVal ? 0.85 : 0.7, 1) },
+    ];
+    if (data.fgHi && pctVal) datasets.push({ label: label + ' (above P)', ...makeDs(data.fg, 0.2, 0.3) });
+
+    const annotations = {};
+    if (pv !== null) {
+      annotations.pctLine = { type: 'line', yMin: pv, yMax: pv, borderColor: pctHighlight === 'p50' ? '#1e40af' : pctHighlight === 'p85' ? '#92400e' : '#9d174d', borderWidth: 2, borderDash: [6,4], label: { content: `${pctHighlight.toUpperCase()}: ${pv}d`, display: true, position: 'end', font: { size: 11 } } };
     }
-    const ed = new Date(sd); ed.setDate(ed.getDate() + td);
-    r.push({ sprints: si, days: td, endDate: ed });
-  }
-  r.sort((a, b) => a.days - b.days);
-  return r;
-}
 
-function runMCHowMany(tDate, tp, n, cal, sd) {
-  const totalSp = Math.floor(Math.max(0, Math.ceil((tDate - sd) / 864e5)) / 14);
-  const r = [];
-  for (let s = 0; s < n; s++) {
-    let done = 0;
-    for (let sp = 0; sp < totalSp; sp++) {
-      const c = cal[sp] || { capacity: 100, focus: 100 };
-      const capMult = (c.capacity !== undefined ? c.capacity : 100) / 100;
-      const focMult = (c.focus !== undefined ? c.focus : 100) / 100;
-      done += Math.max(0, Math.round(tp[Math.floor(Math.random() * tp.length)] * capMult * focMult));
-    }
-    r.push(done);
-  }
-  r.sort((a, b) => a - b);
-  return r;
-}
-
-/* MC for epics: sequential delivery, stories sampled from [min, max] */
-function runMCEpics(epicList, tp, n, cal, sd, focusPct) {
-  // For each simulation: sample story count per epic, then deliver sequentially
-  const allResults = []; // {totalDays, totalSprints, endDate, perEpic: [{days, sprints, endDate}]}
-  for (let s = 0; s < n; s++) {
-    let spIdx = 0, totalDays = 0;
-    const perEpic = [];
-    for (let e = 0; e < epicList.length; e++) {
-      const ep = epicList[e];
-      const stories = ep.min + Math.floor(Math.random() * (ep.max - ep.min + 1));
-      let rem = stories;
-      while (rem > 0 && spIdx < 200) {
-        const c = cal[spIdx] || { capacity: 100 };
-        const base = tp[Math.floor(Math.random() * tp.length)];
-        const adj = Math.max(1, Math.round(base * (c.capacity / 100) * (focusPct / 100)));
-        rem -= adj;
-        totalDays += 14; spIdx++;
+    if (existingChart) existingChart.destroy();
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    return new Chart(ctx, {
+      type: 'bubble',
+      data: { datasets },
+      options: {
+        responsive: true,
+        animation: false,
+        onClick: (evt, els, chart) => {
+          if (!els.length) return;
+          const el = els[0];
+          const ds = chart.data.datasets[el.datasetIndex];
+          const pt = ds.data[el.index];
+          if (pt._item) toggleExclude(pt._item.id);
+        },
+        scales: {
+          x: { type: 'time', time: { unit: 'month' }, min: minDate - 86400000*3, max: maxDate + 86400000*3, title: { display: true, text: 'Completion date' } },
+          y: { title: { display: true, text: label + ' (days)' }, min: 0 }
+        },
+        plugins: { legend: { display: false }, tooltip: {
+          callbacks: {
+            label: ctx2 => {
+              const p = ctx2.raw;
+              if (!p._item) return '';
+              return `${p._item.name} | ${label}: ${p.y}d | SP: ${p._item.sp} | ${p._item.sizeLabel.toUpperCase()}`;
+            }
+          }
+        }, annotation: { annotations } }
       }
-      const ed = new Date(sd); ed.setDate(ed.getDate() + totalDays);
-      perEpic.push({ days: totalDays, sprints: spIdx, endDate: new Date(ed), stories });
+    });
+  }
+
+  leadChart = buildChart('leadChart', leadChart, 'lead', 'Lead Time', 'l');
+  cycleChart = buildChart('cycleChart', cycleChart, 'cycle', 'Cycle Time', 'c');
+
+  // Correlations
+  if (active.length > 1) {
+    const ls = active.map(i => i.lead).filter(v => v !== null);
+    const cs = active.map(i => i.cycle).filter(v => v !== null);
+    const spsA = active.map(i => i.sp);
+    const paired = active.filter(i => i.lead !== null && i.cycle !== null);
+    document.getElementById('corrLC').textContent = pearson(paired.map(i=>i.lead), paired.map(i=>i.cycle));
+    document.getElementById('corrCS').textContent = pearson(active.map(i=>i.cycle), spsA);
+  } else {
+    document.getElementById('corrLC').textContent = '—';
+    document.getElementById('corrCS').textContent = '—';
+  }
+
+  renderItemsTable();
+}
+
+function hexA(hex, a) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function toggleExclude(id) {
+  if (excludedIds.has(id)) excludedIds.delete(id);
+  else excludedIds.add(id);
+  renderTab1();
+  renderXmr();
+  runMonteCarlo();
+}
+
+function sizeClass(s) {
+  return {sm:'badge-sm',md:'badge-md',lg:'badge-lg',xl:'badge-xl'}[s] || 'badge-sm';
+}
+function sizeLabel(s) { return {sm:'Small',md:'Medium',lg:'Large',xl:'XL'}[s]||s; }
+
+function renderItemsTable() {
+  const tbody = document.getElementById('itemsBody');
+  tbody.innerHTML = '';
+  items.forEach(i => {
+    const ex = excludedIds.has(i.id);
+    const tr = document.createElement('tr');
+    if (ex) tr.classList.add('excluded');
+    tr.innerHTML = `<td>${i.name}</td><td>${i.created||'—'}</td><td>${i.started||'—'}</td><td>${i.completed||'—'}</td>
+      <td>${i.lead??'—'}</td><td>${i.cycle??'—'}</td><td>${i.sp}</td>
+      <td><span class="badge ${sizeClass(i.sizeLabel)}">${sizeLabel(i.sizeLabel)}</span></td>
+      <td><button class="secondary" style="padding:3px 10px;font-size:11px;" onclick="toggleExclude(${i.id})">${ex?'Include':'Exclude'}</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+let itemIdCounter = 100;
+function addItem() {
+  const name = document.getElementById('addName').value || 'New item';
+  const created = document.getElementById('addCreated').value;
+  const started = document.getElementById('addStarted').value || created;
+  const completed = document.getElementById('addCompleted').value;
+  const sp = parseInt(document.getElementById('addSP').value)||1;
+  if (!completed) { alert('Please set a completion date.'); return; }
+  const item = enrichItem({ id: ++itemIdCounter, name, created: created||completed, started: started||completed, completed, sp });
+  items.push(item);
+  rawItems.push(item);
+  renderAll();
+}
+
+// ====== TAB 2 XMR ======
+function setXmrView(v, btn) {
+  xmrView = v;
+  document.querySelectorAll('.toggle-group button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderXmr();
+}
+
+function renderXmr() {
+  const active = getActiveItems().sort((a,b) => (a.completed||'') > (b.completed||'') ? 1 : -1);
+  const vals = active.map(i => xmrView === 'cycle' ? i.cycle : i.lead).filter(v => v !== null);
+  const labels = active.slice(0, vals.length).map(i => i.name);
+
+  if (vals.length < 2) {
+    document.getElementById('xmrStats').innerHTML = '<span class="hint">Need at least 2 items.</span>';
+    return;
+  }
+
+  const n = vals.length;
+  const mean = vals.reduce((a,b)=>a+b,0)/n;
+  const mrs = vals.slice(1).map((v,i) => Math.abs(v - vals[i]));
+  const mrMean = mrs.reduce((a,b)=>a+b,0)/mrs.length;
+  const unpl = mean + 2.66 * mrMean;
+  const lnpl = mean - 2.66 * mrMean;
+
+  document.getElementById('xmrStats').innerHTML = `
+    <div class="stat"><div class="val">${mean.toFixed(1)}d</div><div class="lbl">Mean</div></div>
+    <div class="stat"><div class="val" style="color:var(--red)">${unpl.toFixed(1)}d</div><div class="lbl">UNPL</div></div>
+    <div class="stat"><div class="val" style="color:var(--green)">${Math.max(0,lnpl).toFixed(1)}d</div><div class="lbl">LNPL</div></div>
+    <div class="stat"><div class="val">${mrMean.toFixed(1)}</div><div class="lbl">Avg MR</div></div>
+    <div class="stat"><div class="val">${(mrMean * 3.27).toFixed(1)}</div><div class="lbl">MR URL</div></div>
+  `;
+
+  // signals
+  const sig1 = document.getElementById('sig1').checked;
+  const sig2 = document.getElementById('sig2').checked;
+  const sig3 = document.getElementById('sig3').checked;
+  const sig4 = document.getElementById('sig4').checked;
+
+  const signals = new Array(n).fill(null).map(() => []);
+
+  vals.forEach((v, i) => {
+    if (sig1 && (v > unpl || v < lnpl)) signals[i].push('R1');
+    if (sig2) {
+      // 8+ consecutive on same side of mean
+      for (let start = 0; start <= i-7; start++) {
+        const seg = vals.slice(start, start+8);
+        if (seg.every(x=>x>mean) || seg.every(x=>x<mean)) {
+          for (let j=start;j<start+8;j++) { if (!signals[j].includes('R2')) signals[j].push('R2'); }
+        }
+      }
     }
-    allResults.push({ totalDays, totalSprints: spIdx, endDate: new Date(perEpic[perEpic.length - 1].endDate), perEpic });
-  }
-  allResults.sort((a, b) => a.totalDays - b.totalDays);
-  return allResults;
-}
-
-/* MC: how many stories by target date for epics */
-function runMCEpicHowMany(tDate, tp, n, cal, sd, focusPct) {
-  const totalSp = Math.floor(Math.max(0, Math.ceil((tDate - sd) / 864e5)) / 14);
-  const r = [];
-  for (let s = 0; s < n; s++) {
-    let done = 0;
-    for (let sp = 0; sp < totalSp; sp++) {
-      const c = cal[sp] || { capacity: 100 };
-      const base = tp[Math.floor(Math.random() * tp.length)];
-      done += Math.max(0, Math.round(base * (c.capacity / 100) * (focusPct / 100)));
+    if (sig3) {
+      // 3 of 4 within outer 1/3 of limits
+      const zone = (unpl - mean) * 2/3;
+      if (i >= 3) {
+        const seg = vals.slice(i-3, i+1);
+        const nearLimit = seg.filter(x => Math.abs(x-mean) > zone).length;
+        if (nearLimit >= 3) signals[i].push('R3');
+      }
     }
-    r.push(done);
+    if (sig4) {
+      // 6 consecutive trending
+      if (i >= 5) {
+        const seg = vals.slice(i-5, i+1);
+        let up = true, dn = true;
+        for (let j=1;j<seg.length;j++) { if(seg[j]<=seg[j-1]) up=false; if(seg[j]>=seg[j-1]) dn=false; }
+        if (up || dn) signals[i].push('R4');
+      }
+    }
+  });
+
+  const ptColors = vals.map((v,i) => {
+    if (signals[i].length) return '#e63946';
+    if (v > unpl || v < lnpl) return '#e63946';
+    return '#4361ee';
+  });
+
+  if (xChart) xChart.destroy();
+  const ctx = document.getElementById('xChart').getContext('2d');
+  xChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: xmrView === 'cycle' ? 'Cycle Time' : 'Lead Time', data: vals, borderColor: '#4361ee', backgroundColor: ptColors, pointBackgroundColor: ptColors, pointRadius: vals.map((_,i) => signals[i].length ? 8 : 5), tension: 0.2, fill: false },
+        { label: 'Mean', data: new Array(n).fill(mean), borderColor: '#5a6480', borderDash: [4,3], borderWidth: 1.5, pointRadius: 0, fill: false },
+        { label: 'UNPL', data: new Array(n).fill(unpl), borderColor: '#e63946', borderDash: [6,4], borderWidth: 1.5, pointRadius: 0, fill: false },
+        { label: 'LNPL', data: new Array(n).fill(Math.max(0,lnpl)), borderColor: '#2dc653', borderDash: [6,4], borderWidth: 1.5, pointRadius: 0, fill: false },
+      ]
+    },
+    options: { responsive: true, animation: false, plugins: { legend: { position: 'bottom' }, tooltip: {
+      callbacks: { afterLabel: ctx2 => { const s = signals[ctx2.dataIndex]; return s.length ? 'Signals: ' + s.join(', ') : ''; } }
+    }}, scales: { x: { ticks: { maxRotation: 45, font: { size: 10 } } } } }
+  });
+
+  // MR chart
+  const mrUrl = mrMean * 3.27;
+  if (mrChart) mrChart.destroy();
+  const ctx2 = document.getElementById('mrChart').getContext('2d');
+  mrChart = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: labels.slice(1),
+      datasets: [
+        { label: 'Moving Range', data: mrs, backgroundColor: mrs.map(v => v > mrUrl ? '#e63946aa' : '#4361ee88'), borderColor: mrs.map(v => v > mrUrl ? '#e63946' : '#4361ee'), borderWidth: 1 },
+        { label: 'Avg MR', data: new Array(mrs.length).fill(mrMean), type: 'line', borderColor: '#5a6480', borderDash: [4,3], borderWidth: 1.5, pointRadius: 0, fill: false },
+        { label: 'MR URL', data: new Array(mrs.length).fill(mrUrl), type: 'line', borderColor: '#e63946', borderDash: [6,4], borderWidth: 1.5, pointRadius: 0, fill: false },
+      ]
+    },
+    options: { responsive: true, animation: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { ticks: { maxRotation: 45, font: { size: 10 } } } } }
+  });
+
+  // signal legend
+  const lg = document.getElementById('signalLegend');
+  lg.innerHTML = `
+    <div class="signal-legend-item"><span class="signal-legend-dot" style="background:#e63946"></span> Signal (any rule)</div>
+    <div class="signal-legend-item"><span class="signal-legend-dot" style="background:#4361ee"></span> Normal</div>
+    ${sig1 ? '<div class="signal-legend-item">Rule 1: Beyond UNPL/LNPL</div>' : ''}
+    ${sig2 ? '<div class="signal-legend-item">Rule 2: 8+ same side of mean</div>' : ''}
+    ${sig3 ? '<div class="signal-legend-item">Rule 3: 3 of 4 near limit</div>' : ''}
+    ${sig4 ? '<div class="signal-legend-item">Rule 4: 6 consecutive trend</div>' : ''}
+  `;
+}
+
+// ====== TAB 3 MONTE CARLO ======
+function initSprints() {
+  sprints = [];
+  const start = new Date(document.getElementById('mcStart').value || new Date());
+  const sprintLen = parseInt(document.getElementById('mcSprintLen').value) || 14;
+  for (let i = 0; i < 6; i++) {
+    const s = new Date(start.getTime() + i * sprintLen * 86400000);
+    const e = new Date(s.getTime() + sprintLen * 86400000 - 86400000);
+    sprints.push({ n: i+1, start: s.toISOString().slice(0,10), end: e.toISOString().slice(0,10), capacity: 100, focus: 100 });
   }
-  r.sort((a, b) => a - b);
-  return r;
+  renderSprintTable();
 }
-
-function pct(sorted, p) { return sorted[Math.max(0, Math.ceil((p / 100) * sorted.length) - 1)]; }
-function hist(vals, buckets) {
-  buckets = buckets || 25;
-  const mn = vals[0], mx = vals[vals.length - 1], rng = mx - mn || 1, step = rng / buckets;
-  const bins = [];
-  for (let i = 0; i < buckets; i++) bins.push({ min: mn + i * step, max: mn + (i + 1) * step, count: 0 });
-  vals.forEach(v => { bins[Math.min(Math.floor((v - mn) / step), buckets - 1)].count++; });
-  return bins;
+function addSprint() {
+  const last = sprints[sprints.length-1];
+  const sprintLen = parseInt(document.getElementById('mcSprintLen').value) || 14;
+  const s = new Date(new Date(last.end).getTime() + 86400000);
+  const e = new Date(s.getTime() + sprintLen * 86400000 - 86400000);
+  sprints.push({ n: sprints.length+1, start: s.toISOString().slice(0,10), end: e.toISOString().slice(0,10), capacity: 100, focus: 100 });
+  runMonteCarlo();
 }
-
-function fmtDate(d) { return d instanceof Date ? d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : d; }
-function fmtISO(d) { return d.toISOString().split('T')[0]; }
-function effBacklog() { return Math.ceil(backlogSize * (backlogPercent / 100)); }
-
-function renderHist(id, data, hlVal, color) {
-  const el = document.getElementById(id); if (!el) return;
-  const mx = Math.max(...data.map(b => b.count));
-  let h = '';
-  data.forEach(bin => {
-    const ht = mx > 0 ? (bin.count / mx) * 100 : 0;
-    const hl = hlVal !== undefined && (bin.min + bin.max) / 2 <= hlVal;
-    const bg = hl ? color : 'var(--muted)';
-    const mh = bin.count > 0 ? 'min-height:2px;' : '';
-    h += '<div class="hist-bar-wrap"><div class="hist-bar" style="height:' + ht + '%;' + mh + 'background:' + bg + '"></div></div>';
+function deleteSprint(i) { sprints.splice(i,1); runMonteCarlo(); }
+function renderSprintTable() {
+  const tbody = document.getElementById('sprintBody');
+  tbody.innerHTML = '';
+  const baseVel = parseFloat(document.getElementById('mcVelocity').value)||10;
+  sprints.forEach((s,i) => {
+    const eff = Math.round(baseVel * s.capacity/100 * s.focus/100 * 10)/10;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${s.n}</td><td>${s.start}</td><td>${s.end}</td>
+      <td><input type="number" value="${s.capacity}" min="1" max="200" style="width:60px" onchange="sprints[${i}].capacity=+this.value;runMonteCarlo()"></td>
+      <td><input type="number" value="${s.focus}" min="1" max="100" style="width:60px" onchange="sprints[${i}].focus=+this.value;runMonteCarlo()"></td>
+      <td>${eff} stories</td>
+      <td><button class="secondary danger" style="padding:2px 8px;font-size:11px;background:#fee2e2;color:#991b1b;border:none;" onclick="deleteSprint(${i})">✕</button></td>`;
+    tbody.appendChild(tr);
   });
-  el.innerHTML = h;
 }
 
-function renderPcts(id, ps, color) {
-  const el = document.getElementById(id); if (!el) return;
-  let h = '';
-  [50, 70, 85, 95].forEach(p => {
-    h += '<div class="pct-item"><div class="pct-label">P' + p + '</div><div class="pct-value" style="color:' + color + '">' + ps[p] + '</div></div>';
-  });
-  el.innerHTML = h;
-}
+function runMonteCarlo() {
+  const backlogTotal = parseInt(document.getElementById('mcBacklog').value)||50;
+  const pctForecast = parseFloat(document.getElementById('mcPct').value)/100||1;
+  const backlog = Math.ceil(backlogTotal * pctForecast);
+  const baseVel = parseFloat(document.getElementById('mcVelocity').value)||10;
+  const sprintLen = parseInt(document.getElementById('mcSprintLen').value)||14;
+  const startDate = new Date(document.getElementById('mcStart').value || new Date());
+  const targetDate = new Date(document.getElementById('mcTarget').value || new Date(Date.now()+90*86400000));
+  const sims = parseInt(document.getElementById('mcSims').value)||5000;
+  const probWanted = parseFloat(document.getElementById('mcProb').value)/100||0.85;
 
-function tpStats(tp) {
-  const avg = (tp.reduce((a, b) => a + b, 0) / tp.length).toFixed(1);
-  return 'Średnia: ' + avg + ' · Min: ' + Math.min(...tp) + ' · Max: ' + Math.max(...tp) + ' · Próbek: ' + tp.length;
-}
+  if (!sprints.length) initSprints();
 
-/* ═══════════════════════════════════════════════
-   CALENDARS
-   ═══════════════════════════════════════════════ */
-function renderCalendar() {
-  const tbody = document.getElementById('calendarBody');
-  let h = '';
-  sprintCalendar.forEach((sp, i) => {
-    const eff = Math.round((sp.capacity / 100) * (sp.focus / 100) * 100);
-    const cls = eff < 70 ? ' class="low-eff"' : '';
-    const ec = eff < 50 ? 'eff-low' : eff < 80 ? 'eff-mid' : 'eff-high';
-    h += '<tr' + cls + '><td>S' + (i + 1) + '</td><td style="color:var(--dim)">' + fmtDate(sp.start) + ' – ' + fmtDate(sp.end) + '</td>' +
-      '<td class="center"><input class="cal-input" type="number" min="0" max="100" value="' + sp.capacity + '" onchange="updSprint(' + i + ',\'capacity\',this.value)"></td>' +
-      '<td class="center"><input class="cal-input" type="number" min="0" max="100" value="' + sp.focus + '" onchange="updSprint(' + i + ',\'focus\',this.value)"></td>' +
-      '<td class="center ' + ec + '">' + eff + '%</td></tr>';
-  });
-  tbody.innerHTML = h;
-}
-function updSprint(i, f, v) { sprintCalendar[i][f] = Math.max(0, Math.min(100, parseInt(v) || 0)); renderCalendar(); run(); }
-function resetCalendar() { sprintCalendar.forEach(sp => { sp.capacity = 100; sp.focus = 100; }); renderCalendar(); run(); }
-
-function renderEpicCal() {
-  const tbody = document.getElementById('epicCalBody');
-  let h = '';
-  epicCalendar.forEach((sp, i) => {
-    const eff = Math.round((sp.capacity / 100) * (epicFocus / 100) * 100);
-    const cls = eff < 70 ? ' class="low-eff"' : '';
-    const ec = eff < 50 ? 'eff-low' : eff < 80 ? 'eff-mid' : 'eff-high';
-    h += '<tr' + cls + '><td>S' + (i + 1) + '</td><td style="color:var(--dim)">' + fmtDate(sp.start) + ' – ' + fmtDate(sp.end) + '</td>' +
-      '<td class="center"><input class="cal-input" type="number" min="0" max="100" value="' + sp.capacity + '" onchange="updEpicSprint(' + i + ',this.value)"></td>' +
-      '<td class="center ' + ec + '">' + eff + '%</td></tr>';
-  });
-  tbody.innerHTML = h;
-}
-function updEpicSprint(i, v) { epicCalendar[i].capacity = Math.max(0, Math.min(100, parseInt(v) || 0)); renderEpicCal(); runEpics(); }
-function resetEpicCal() { buildEpicCalendar(); renderEpicCal(); runEpics(); }
-
-/* ═══════════════════════════════════════════════
-   EPIC LIST
-   ═══════════════════════════════════════════════ */
-function renderEpicList() {
-  const tbody = document.getElementById('epicListBody');
-  let h = '';
-  epics.forEach((ep, i) => {
-    const avg = ((ep.min + ep.max) / 2).toFixed(1);
-    h += '<tr><td>E' + (i + 1) + '</td>' +
-      '<td><input class="cal-input wide" type="text" value="' + ep.name + '" onchange="updEpic(' + i + ',\'name\',this.value)"></td>' +
-      '<td class="center"><input class="epic-input" type="number" min="1" max="99" value="' + ep.min + '" onchange="updEpic(' + i + ',\'min\',this.value)"></td>' +
-      '<td class="center"><input class="epic-input" type="number" min="1" max="99" value="' + ep.max + '" onchange="updEpic(' + i + ',\'max\',this.value)"></td>' +
-      '<td class="center" style="color:var(--dim)">' + avg + ' US</td>' +
-      '<td class="center"><button class="action-btn remove" onclick="removeEpic(' + i + ')">✕</button></td></tr>';
-  });
-  tbody.innerHTML = h;
-  const totalMin = epics.reduce((s, e) => s + e.min, 0);
-  const totalMax = epics.reduce((s, e) => s + e.max, 0);
-  const totalAvg = ((totalMin + totalMax) / 2).toFixed(0);
-  document.getElementById('epicTotalInfo').innerHTML =
-    'Łącznie: <strong>' + epics.length + '</strong> epików · <strong>' + totalMin + '–' + totalMax + '</strong> User Stories (średnio ~' + totalAvg + ')';
-}
-function updEpic(i, f, v) {
-  if (f === 'name') { epics[i].name = v; }
-  else {
-    v = Math.max(1, parseInt(v) || 1);
-    epics[i][f] = v;
-    if (epics[i].min > epics[i].max) epics[i].max = epics[i].min;
+  // gather historic velocity per sprint if data available
+  const histVelocities = [];
+  const active = getActiveItems();
+  if (active.length > 3) {
+    const sorted = active.sort((a,b)=>a.completed>b.completed?1:-1);
+    const startTime = new Date(sorted[0].completed).getTime();
+    const buckets = {};
+    sorted.forEach(i => {
+      const b = Math.floor((new Date(i.completed).getTime() - startTime) / (sprintLen * 86400000));
+      buckets[b] = (buckets[b]||0)+1;
+    });
+    Object.values(buckets).forEach(v => histVelocities.push(v));
   }
-  renderEpicList(); runEpics();
+
+  function sampleVelocity(sprintIdx) {
+    const s = sprints[sprintIdx] || sprints[sprints.length-1] || {capacity:100,focus:100};
+    const modifier = s.capacity/100 * s.focus/100;
+    if (histVelocities.length > 1) {
+      const v = histVelocities[Math.floor(Math.random()*histVelocities.length)];
+      return Math.max(1, Math.round(v * modifier));
+    }
+    // add ±30% noise
+    return Math.max(1, Math.round(baseVel * modifier * (0.7 + Math.random()*0.6)));
+  }
+
+  const completionDays = [];
+  const itemsAtTarget = [];
+  const targetDays = Math.round((targetDate - startDate) / 86400000);
+
+  for (let s = 0; s < sims; s++) {
+    let done = 0, day = 0, sprint = 0;
+    let finishedDay = null;
+    while (done < backlog && day < 1000) {
+      const vel = sampleVelocity(sprint);
+      done += vel;
+      day += sprintLen;
+      sprint++;
+      if (finishedDay === null && done >= backlog) finishedDay = day;
+    }
+    completionDays.push(finishedDay ?? day);
+
+    // items at target
+    done = 0; day = 0; sprint = 0;
+    while (day < targetDays) {
+      done += sampleVelocity(sprint);
+      day += sprintLen;
+      sprint++;
+    }
+    itemsAtTarget.push(Math.min(done, backlog));
+  }
+
+  completionDays.sort((a,b)=>a-b);
+  itemsAtTarget.sort((a,b)=>a-b);
+
+  const p50d = completionDays[Math.floor(sims*0.50)];
+  const p85d = completionDays[Math.floor(sims*0.85)];
+  const p95d = completionDays[Math.floor(sims*0.95)];
+  const pWd  = completionDays[Math.floor(sims*probWanted)];
+
+  const addDays = (d, days) => { const r = new Date(d.getTime()+days*86400000); return r.toISOString().slice(0,10); };
+
+  const pItems50 = itemsAtTarget[Math.floor(sims*0.50)];
+  const pItems85 = itemsAtTarget[Math.floor(sims*0.85)];
+  const pItems95 = itemsAtTarget[Math.floor(sims*0.95)];
+  const pItemsW  = itemsAtTarget[Math.floor(sims*probWanted)];
+
+  document.getElementById('mcResults').innerHTML = `
+    <div class="mc-res"><div class="val">${addDays(startDate,p50d)}</div><div class="lbl">P50 completion (all)</div></div>
+    <div class="mc-res"><div class="val">${addDays(startDate,p85d)}</div><div class="lbl">P85 completion (all)</div></div>
+    <div class="mc-res"><div class="val">${addDays(startDate,p95d)}</div><div class="lbl">P95 completion (all)</div></div>
+    <div class="mc-res" style="border:2px solid var(--accent)"><div class="val">${addDays(startDate,pWd)}</div><div class="lbl">P${Math.round(probWanted*100)} completion</div></div>
+    <div class="mc-res"><div class="val">${pItems85} items</div><div class="lbl">P85 items by target</div></div>
+    <div class="mc-res"><div class="val">${pItemsW} items</div><div class="lbl">P${Math.round(probWanted*100)} items by target</div></div>
+    <div class="mc-res"><div class="val">${Math.round(pItems85/backlog*100)}%</div><div class="lbl">% complete (P85 by target)</div></div>
+  `;
+
+  // Distribution chart
+  const buckets = 20;
+  const maxD = completionDays[sims-1];
+  const bSize = Math.ceil(maxD / buckets);
+  const hist = new Array(buckets).fill(0);
+  completionDays.forEach(d => { const b = Math.min(buckets-1, Math.floor(d/bSize)); hist[b]++; });
+  const histLabels = hist.map((_,i) => addDays(startDate, i*bSize));
+  const cumPct = hist.map((_,i) => Math.round(completionDays.filter(d=>d<=(i+1)*bSize).length/sims*100));
+
+  if (mcChart) mcChart.destroy();
+  const ctx = document.getElementById('mcChart').getContext('2d');
+  mcChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: histLabels, datasets: [
+      { label: 'Simulations', data: hist, backgroundColor: '#4361ee88', borderColor: '#4361ee', borderWidth: 1 },
+      { label: 'Cumulative %', data: cumPct, type: 'line', yAxisID: 'y2', borderColor: '#e63946', borderWidth: 2, pointRadius: 0, fill: false }
+    ]},
+    options: { responsive: true, animation: false, plugins: { legend: { position: 'bottom' } },
+      scales: { y: { title: { display: true, text: 'Count' } }, y2: { position: 'right', title: { display: true, text: 'Cumulative %' }, max: 100, grid: { drawOnChartArea: false } },
+        x: { ticks: { maxRotation: 45, font: { size: 10 } } }
+      }
+    }
+  });
+
+  // Items by target chart
+  const imax = itemsAtTarget[sims-1];
+  const ihist = new Array(Math.min(imax+1,20)).fill(0);
+  const istep = Math.ceil(imax/20)||1;
+  itemsAtTarget.forEach(v => { const b = Math.min(19, Math.floor(v/istep)); ihist[b]++; });
+  if (mcChart2) mcChart2.destroy();
+  const ctx2 = document.getElementById('mcChart2').getContext('2d');
+  mcChart2 = new Chart(ctx2, {
+    type: 'bar',
+    data: { labels: ihist.map((_,i)=>i*istep), datasets: [
+      { label: `Items by ${targetDate.toISOString().slice(0,10)}`, data: ihist, backgroundColor: '#2dc65388', borderColor: '#2dc653', borderWidth: 1 }
+    ]},
+    options: { responsive: true, animation: false, plugins: { legend: { position: 'bottom' } },
+      scales: { x: { title: { display: true, text: 'Items completed' } }, y: { title: { display: true, text: 'Count' } } }
+    }
+  });
+
+  renderSprintTable();
 }
+
+// ====== TAB 4 EPICS ======
+const UNDERSTANDING = { none: { label: 'No understanding', mult: 2.5 }, basic: { label: 'Basic', mult: 1.6 }, good: { label: 'Good', mult: 1.2 }, very_good: { label: 'Very good', mult: 1.0 } };
+
+function initEpics() {
+  epics = [
+    { id: epicIdCounter++, name: 'Epic 1', min: 8, max: 15, understanding: 'basic', dep: null, color: '#4361ee' },
+    { id: epicIdCounter++, name: 'Epic 2', min: 6, max: 12, understanding: 'good', dep: null, color: '#7209b7' },
+    { id: epicIdCounter++, name: 'Epic 3', min: 10, max: 20, understanding: 'none', dep: null, color: '#f4a261' },
+    { id: epicIdCounter++, name: 'Epic 4', min: 5, max: 8, understanding: 'very_good', dep: null, color: '#2dc653' },
+    { id: epicIdCounter++, name: 'Epic 5', min: 12, max: 18, understanding: 'basic', dep: null, color: '#e63946' },
+    { id: epicIdCounter++, name: 'Epic 6', min: 7, max: 14, understanding: 'good', dep: null, color: '#f9c74f' },
+  ];
+}
+initEpics();
+
 function addEpic() {
-  epics.push({ name: 'Epik ' + (epics.length + 1), min: 4, max: 8 });
-  renderEpicList(); runEpics();
+  const colors = ['#4361ee','#7209b7','#f4a261','#2dc653','#e63946','#f9c74f','#3a0ca3','#06d6a0'];
+  epics.push({ id: epicIdCounter++, name: `Epic ${epics.length+1}`, min: 5, max: 10, understanding: 'good', dep: null, color: colors[epics.length % colors.length] });
+  renderEpics();
 }
-function removeEpic(i) {
-  if (epics.length <= 1) return;
-  epics.splice(i, 1);
-  renderEpicList(); runEpics();
-}
+function removeEpic(id) { epics = epics.filter(e => e.id !== id); renderEpics(); }
 
-/* ═══════════════════════════════════════════════
-   TABS
-   ═══════════════════════════════════════════════ */
-function switchTab(tab) {
-  activeTab = tab;
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(el => el.className = 'tab-btn');
-  const map = {
-    when: ['panelWhen', 'tabWhen', 'active-when'],
-    howmany: ['panelHowmany', 'tabHowmany', 'active-howmany'],
-    calendar: ['panelCalendar', 'tabCalendar', 'active-calendar'],
-    epics: ['panelEpics', 'tabEpics', 'active-epics']
-  };
-  const m = map[tab];
-  document.getElementById(m[0]).classList.add('active');
-  document.getElementById(m[1]).className = 'tab-btn ' + m[2];
-}
+function renderEpics() {
+  const container = document.getElementById('epicsContainer');
+  container.innerHTML = '';
+  const epicVel = parseFloat(document.getElementById('epicVelocity').value)||10;
+  const focus = parseFloat(document.getElementById('epicFocus').value)/100||0.75;
+  const sprintLen = 14;
+  const startDate = new Date(document.getElementById('epicStart').value||'2026-07-01');
+  const endDate = new Date(document.getElementById('epicFinish').value||'2026-09-30');
+  const probKey = parseFloat(document.getElementById('epicProb').value)/100||0.85;
+  const sims = 2000;
+  const totalDays = Math.round((endDate - startDate)/86400000);
 
-/* ═══════════════════════════════════════════════
-   RUN: MAIN TABS
-   ═══════════════════════════════════════════════ */
-function run() {
-  const eff = effBacklog();
-  document.getElementById('backlogVal').textContent = backlogSize;
-  document.getElementById('backlogPctVal').textContent = backlogPercent + '%';
-  document.getElementById('probVal').textContent = probability + '%';
-  document.getElementById('effectiveBacklogDisp').textContent = eff;
-  document.getElementById('totalBacklogDisp').textContent = backlogSize;
-  document.getElementById('throughputStats').textContent = tpStats(throughput);
-  document.getElementById('headerSub').textContent = 'ASTRA · ' + NUM_SIMS.toLocaleString() + ' symulacji';
+  const epicResults = [];
 
-  const wr = runMCWhen(eff, throughput, NUM_SIMS, sprintCalendar, startDate);
-  const wp = pct(wr, probability);
-  const items85 = Math.ceil(backlogSize * 0.85);
-  const w85 = runMCWhen(items85, throughput, NUM_SIMS, sprintCalendar, startDate);
-  const wp85 = pct(w85, 85);
+  epics.forEach((e, idx) => {
+    const u = UNDERSTANDING[e.understanding] || UNDERSTANDING.basic;
+    // MC for this epic
+    const completionSprints = [];
+    for (let s = 0; s < sims; s++) {
+      const storyCount = e.min + Math.floor(Math.random()*(e.max - e.min + 1));
+      const adjustedCount = storyCount * u.mult;
+      let done = 0, sprC = 0;
+      while (done < adjustedCount) {
+        done += Math.max(1, epicVel * focus * (0.7 + Math.random()*0.6));
+        sprC++;
+      }
+      completionSprints.push(sprC);
+    }
+    completionSprints.sort((a,b)=>a-b);
+    const pSprintsAt = completionSprints[Math.floor(sims*probKey)];
+    const pDays = pSprintsAt * sprintLen;
 
-  document.getElementById('whenTitle1').textContent = '🎯 ' + backlogPercent + '% BACKLOGU @ P' + probability;
-  document.getElementById('whenVal1').textContent = fmtDate(wp.endDate);
-  document.getElementById('whenSub1').textContent = wp.sprints + ' sprintów';
-  document.getElementById('whenVal2').textContent = fmtDate(wp85.endDate);
-  document.getElementById('whenSub2').textContent = items85 + ' elementów';
-  document.getElementById('whenVal3').textContent = fmtDate(wr[0].endDate);
-  document.getElementById('whenSub3').textContent = wr[0].sprints + ' sprintów (P1)';
-  document.getElementById('whenChartTitle').textContent = 'Rozkład wyników – dni do ukończenia ' + eff + ' elementów';
-  document.getElementById('whenChartSub').textContent = 'Podświetlenie: P' + probability + ' = ' + wp.days + ' dni';
-  renderHist('whenHistogram', hist(wr.map(r => r.days), 25), wp.days, 'var(--accent)');
-  document.getElementById('whenAxisMin').textContent = wr[0].days + 'd';
-  document.getElementById('whenAxisMax').textContent = wr[wr.length - 1].days + 'd';
-  const wPcts = {}; [50, 70, 85, 95].forEach(p => { wPcts[p] = fmtDate(pct(wr, p).endDate); });
-  renderPcts('whenPercentiles', wPcts, 'var(--accent)');
+    // dependency offset
+    let depOffset = 0;
+    if (e.dep) {
+      const depE = epicResults.find(r => r.id === e.dep);
+      if (depE) depOffset = depE.pDays;
+    }
 
-  const hr = runMCHowMany(targetDate, throughput, NUM_SIMS, sprintCalendar, startDate);
-  const hp = pct(hr, probability);
-  document.getElementById('hmTitle1').textContent = '📊 UKOŃCZYMY DO ' + fmtDate(targetDate) + ' @ P' + probability;
-  document.getElementById('hmVal1').textContent = hp + ' items';
-  document.getElementById('hmSub1').textContent = 'z ' + eff + ' w backlogu';
-  document.getElementById('hmVal2').textContent = pct(hr, 50) + ' items';
-  document.getElementById('hmVal3').textContent = pct(hr, 95) + ' items';
-  document.getElementById('hmChartTitle').textContent = 'Rozkład – ile elementów ukończymy do ' + fmtDate(targetDate);
-  document.getElementById('hmChartSub').textContent = 'Podświetlenie: P' + probability + ' = ' + hp + ' elementów';
-  renderHist('hmHistogram', hist(hr, 25), hp, 'var(--accent2)');
-  document.getElementById('hmAxisMin').textContent = hr[0];
-  document.getElementById('hmAxisMax').textContent = hr[hr.length - 1];
-  const hPcts = {}; [50, 70, 85, 95].forEach(p => { hPcts[p] = pct(hr, p); });
-  renderPcts('hmPercentiles', hPcts, 'var(--accent2)');
-  document.getElementById('footerRight').textContent = 'Backlog: ' + eff + ' el. · Throughput: ' + throughput.join(', ') + ' items/sprint';
-}
+    const completionDay = depOffset + pDays;
+    const endD = new Date(startDate.getTime() + completionDay * 86400000).toISOString().slice(0,10);
+    const onTime = completionDay <= totalDays;
 
-/* ═══════════════════════════════════════════════
-   RUN: EPICS
-   ═══════════════════════════════════════════════ */
-function runEpics() {
-  document.getElementById('epicProbVal').textContent = epicProb + '%';
-  document.getElementById('epicFocusVal').textContent = epicFocus + '%';
-  document.getElementById('epicTpStats').textContent = tpStats(epicTp);
+    epicResults.push({ id: e.id, name: e.name, pDays: completionDay, endD, onTime, depOffset, pSprintsAt, color: e.color, u });
 
-  // All-epics WHEN
-  const er = runMCEpics(epics, epicTp, NUM_SIMS, epicCalendar, epicStartDate, epicFocus);
-  const ep = pct(er, epicProb);
-
-  const deadlineDate = epicTargetDate;
-  const isOnTime = ep.endDate <= deadlineDate;
-
-  document.getElementById('epicStatTitle1').textContent = '🏔️ WSZYSTKIE EPIKI @ P' + epicProb;
-  document.getElementById('epicStatVal1').textContent = fmtDate(ep.endDate);
-  document.getElementById('epicStatSub1').textContent = ep.totalSprints + ' sprintów · ' + (isOnTime ? '✅ w terminie' : '⚠️ po terminie (' + fmtDate(deadlineDate) + ')');
-
-  // How many stories by target
-  const hmEpic = runMCEpicHowMany(epicTargetDate, epicTp, NUM_SIMS, epicCalendar, epicStartDate, epicFocus);
-  const hmEpVal = pct(hmEpic, epicProb);
-  const totalAvgStories = Math.round(epics.reduce((s, e) => s + (e.min + e.max) / 2, 0));
-  document.getElementById('epicStatTitle2').textContent = '📊 STORIES DO ' + fmtDate(epicTargetDate) + ' @ P' + epicProb;
-  document.getElementById('epicStatVal2').textContent = hmEpVal + ' stories';
-  document.getElementById('epicStatSub2').textContent = 'potrzebnych ~' + totalAvgStories + ' (średnia est.)';
-
-  document.getElementById('epicStatVal3').textContent = fmtDate(er[0].endDate);
-  document.getElementById('epicStatSub3').textContent = er[0].totalSprints + ' sprintów (P1)';
-
-  // Histogram
-  const days = er.map(r => r.totalDays);
-  document.getElementById('epicChartTitle').textContent = 'Rozkład – dni do ukończenia ' + epics.length + ' epików';
-  document.getElementById('epicChartSub').textContent = 'Podświetlenie: P' + epicProb + ' = ' + ep.totalDays + ' dni';
-  renderHist('epicHistogram', hist(days, 25), ep.totalDays, 'var(--accent4)');
-  document.getElementById('epicAxisMin').textContent = er[0].totalDays + 'd';
-  document.getElementById('epicAxisMax').textContent = er[er.length - 1].totalDays + 'd';
-
-  const ePcts = {}; [50, 70, 85, 95].forEach(p => { ePcts[p] = fmtDate(pct(er, p).endDate); });
-  renderPcts('epicPercentiles', ePcts, 'var(--accent4)');
-
-  // Per-epic results (at chosen percentile)
-  const target = pct(er, epicProb);
-  const container = document.getElementById('epicResults');
-  let h = '';
-  const colors = ['var(--accent)', 'var(--accent2)', 'var(--accent3)', 'var(--accent4)', '#f0c040', '#58d1ff'];
-  // Gather per-epic dates from many simulations at the percentile index
-  const pctIdx = Math.max(0, Math.ceil((epicProb / 100) * NUM_SIMS) - 1);
-  // Sort by total, take the percentile simulation
-  const simAtPct = er[pctIdx];
-  epics.forEach((ep, i) => {
-    const pe = simAtPct.perEpic[i];
-    const isLate = pe.endDate > deadlineDate;
-    const riskClass = isLate ? 'risk-red' : (pe.endDate > new Date(deadlineDate.getTime() - 14 * 864e5) ? 'risk-yellow' : 'risk-green');
-    const col = colors[i % colors.length];
-    h += '<div class="epic-result-card">' +
-      '<div class="epic-name" style="color:' + col + '">' + ep.name + '</div>' +
-      '<div class="epic-detail">Stories: ' + ep.min + '–' + ep.max + ' (sim: ' + pe.stories + ')</div>' +
-      '<div class="epic-date ' + riskClass + '">' + fmtDate(pe.endDate) + '</div>' +
-      '<div class="epic-detail">' + pe.sprints + ' sprintów łącznie · ' + pe.days + ' dni od startu</div>' +
-      (isLate ? '<div class="epic-detail risk-red">⚠️ po deadline</div>' : '<div class="epic-detail risk-green">✅ w terminie</div>') +
-      '</div>';
+    const card = document.createElement('div');
+    card.className = 'epic-card';
+    card.innerHTML = `
+      <div class="epic-head">
+        <span style="width:14px;height:14px;border-radius:3px;background:${e.color};display:inline-block;flex-shrink:0"></span>
+        <input class="epic-name" value="${e.name}" style="border:none;background:transparent;font-size:14px;font-weight:700;flex:1;" onchange="epics[${idx}].name=this.value;renderEpics()">
+        <button class="secondary" style="padding:2px 8px;font-size:11px;background:#fee2e2;color:#991b1b;border:none;" onclick="removeEpic(${e.id})">✕ Remove</button>
+      </div>
+      <div class="form-grid">
+        <div><label>Min stories</label><input type="number" value="${e.min}" min="1" onchange="epics[${idx}].min=+this.value;renderEpics()"></div>
+        <div><label>Max stories</label><input type="number" value="${e.max}" min="1" onchange="epics[${idx}].max=+this.value;renderEpics()"></div>
+        <div><label>Understanding</label>
+          <select class="understanding-sel" onchange="epics[${idx}].understanding=this.value;renderEpics()">
+            ${Object.entries(UNDERSTANDING).map(([k,v])=>`<option value="${k}" ${e.understanding===k?'selected':''}>${v.label} (×${v.mult})</option>`).join('')}
+          </select>
+        </div>
+        <div><label>Depends on</label>
+          <select onchange="epics[${idx}].dep=this.value?+this.value:null;renderEpics()">
+            <option value="">None (parallel)</option>
+            ${epics.filter(o=>o.id!==e.id).map(o=>`<option value="${o.id}" ${e.dep===o.id?'selected':''}>${o.name}</option>`).join('')}
+          </select>
+        </div>
+        <div><label>Color</label><input type="color" value="${e.color}" onchange="epics[${idx}].color=this.value;renderEpics()" style="width:100%;height:32px;padding:2px;"></div>
+      </div>
+      <div class="epic-result">
+        <strong>${onTime ? '✅' : '⚠️'} Forecast end: ${endD}</strong> (P${Math.round(probKey*100)} = ${pSprintsAt} sprints / ${completionDay} days)
+        &nbsp;<span class="risk-badge ${onTime?'risk-3':'risk-1'}">${onTime?'On track':'At risk'}</span>
+        ${e.dep ? `<span class="epic-dep">⛓ After: ${epics.find(x=>x.id===e.dep)?.name||''}</span>` : ''}
+        <div class="progress-bar-wrap"><div class="progress-bar" style="width:${Math.min(100,Math.round(completionDay/totalDays*100))}%;background:${e.color}"></div></div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px;">${Math.min(100,Math.round(completionDay/totalDays*100))}% of available time</div>
+      </div>`;
+    container.appendChild(card);
   });
-  container.innerHTML = h;
+
+  renderEpicTimeline(epicResults, startDate, endDate);
+  renderEpicSummary(epicResults, endDate);
 }
 
-/* ═══════════════════════════════════════════════
-   EVENT BINDINGS
-   ═══════════════════════════════════════════════ */
-document.getElementById('backlogSlider').addEventListener('input', function() { backlogSize = +this.value; run(); });
-document.getElementById('backlogPctSlider').addEventListener('input', function() { backlogPercent = +this.value; run(); });
-document.getElementById('probSlider').addEventListener('input', function() { probability = +this.value; run(); });
-function parseTp() {
-  const p = document.getElementById('throughputInput').value.split(/[,;\s]+/).map(Number).filter(n => !isNaN(n) && n >= 0);
-  if (p.length > 0) { throughput = p; run(); }
-}
-document.getElementById('throughputInput').addEventListener('blur', parseTp);
-document.getElementById('throughputInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') parseTp(); });
-document.getElementById('targetDateInput').addEventListener('change', function() { targetDate = new Date(this.value + 'T00:00:00'); run(); });
+function renderEpicTimeline(results, startDate, endDate) {
+  const totalDays = Math.round((endDate-startDate)/86400000);
+  if (epicChart) epicChart.destroy();
+  const ctx = document.getElementById('epic-timeline-canvas').getContext('2d');
+  const labels = results.map(r => r.name);
+  const datasets = results.map(r => ({
+    label: r.name,
+    data: results.map((_, i) => i === results.indexOf(r) ? r.pDays : 0),
+    backgroundColor: r.color + '99',
+    borderColor: r.color,
+    borderWidth: 2,
+    borderSkipped: false,
+  }));
 
-// Epic bindings
-document.getElementById('epicProbSlider').addEventListener('input', function() { epicProb = +this.value; runEpics(); });
-document.getElementById('epicFocusSlider').addEventListener('input', function() { epicFocus = +this.value; renderEpicCal(); runEpics(); });
-function parseEpicTp() {
-  const p = document.getElementById('epicTpInput').value.split(/[,;\s]+/).map(Number).filter(n => !isNaN(n) && n >= 0);
-  if (p.length > 0) { epicTp = p; runEpics(); }
-}
-document.getElementById('epicTpInput').addEventListener('blur', parseEpicTp);
-document.getElementById('epicTpInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') parseEpicTp(); });
-document.getElementById('epicStartDate').addEventListener('change', function() {
-  epicStartDate = new Date(this.value + 'T00:00:00');
-  buildEpicCalendar(); renderEpicCal(); runEpics();
-});
-document.getElementById('epicTargetDate').addEventListener('change', function() {
-  epicTargetDate = new Date(this.value + 'T00:00:00');
-  buildEpicCalendar(); renderEpicCal(); runEpics();
-});
+  // Gantt-style: use floating bars
+  epicChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Duration',
+        data: results.map(r => [r.depOffset, r.pDays]),
+        backgroundColor: results.map(r => r.color + 'bb'),
+        borderColor: results.map(r => r.color),
+        borderWidth: 2,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx2 => {
+          const r = results[ctx2.dataIndex];
+          return `${r.name}: ${r.depOffset}d → ${r.pDays}d (end: ${r.endD})`;
+        }}}
+      },
+      scales: {
+        x: {
+          min: 0,
+          max: totalDays + 7,
+          title: { display: true, text: 'Days from start' },
+          ticks: {
+            callback: v => {
+              const d = new Date(startDate.getTime() + v*86400000);
+              return d.toLocaleDateString('en-GB', {month:'short',day:'numeric'});
+            }
+          }
+        },
+        y: { grid: { display: false } }
+      }
+    }
+  });
 
-/* ═══════════════════════════════════════════════
-   INIT
-   ═══════════════════════════════════════════════ */
-document.getElementById('targetDateInput').value = fmtISO(targetDate);
-renderCalendar();
-renderEpicCal();
-renderEpicList();
-run();
-runEpics();
+  // Draw target line as annotation (via plugin)
+  Chart.register({
+    id: 'epicDeadline',
+    afterDraw: (chart) => {
+      if (chart.canvas.id !== 'epic-timeline-canvas') return;
+      const { ctx, scales: {x} } = chart;
+      const xPos = x.getPixelForValue(totalDays);
+      ctx.save();
+      ctx.beginPath();
+      ctx.strokeStyle = '#e63946';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6,4]);
+      ctx.moveTo(xPos, chart.chartArea.top);
+      ctx.lineTo(xPos, chart.chartArea.bottom);
+      ctx.stroke();
+      ctx.fillStyle = '#e63946';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText('Deadline', xPos+4, chart.chartArea.top+14);
+      ctx.restore();
+    }
+  });
+  epicChart.update();
+}
+
+function renderEpicSummary(results, endDate) {
+  const summary = document.getElementById('epicSummary');
+  const onTime = results.filter(r=>r.onTime).length;
+  summary.innerHTML = `
+    <div class="stat-row">
+      <div class="stat"><div class="val">${results.length}</div><div class="lbl">Total Epics</div></div>
+      <div class="stat"><div class="val" style="color:var(--green)">${onTime}</div><div class="lbl">On track</div></div>
+      <div class="stat"><div class="val" style="color:var(--red)">${results.length-onTime}</div><div class="lbl">At risk</div></div>
+      <div class="stat"><div class="val">${results.length ? Math.round(results.reduce((a,r)=>a+r.pDays,0)/results.length) : 0}d</div><div class="lbl">Avg forecast</div></div>
+    </div>
+    <table><thead><tr><th>Epic</th><th>Understanding</th><th>Depends On</th><th>Forecast End</th><th>Status</th></tr></thead>
+    <tbody>
+      ${results.map(r => {
+        const e = epics.find(x=>x.id===r.id);
+        const depName = e?.dep ? epics.find(x=>x.id===e.dep)?.name||'—' : '—';
+        return `<tr>
+          <td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${r.color};margin-right:4px;"></span>${r.name}</td>
+          <td>${r.u.label} (×${r.u.mult})</td>
+          <td>${depName}</td>
+          <td>${r.endD}</td>
+          <td><span class="risk-badge ${r.onTime?'risk-3':'risk-1'}">${r.onTime?'On track':'At risk'}</span></td>
+        </tr>`;
+      }).join('')}
+    </tbody></table>`;
+}
+
+// ====== TABS ======
+function switchTab(n) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===n));
+  document.querySelectorAll('.tab-content').forEach((t,i) => t.classList.toggle('active', i===n));
+  if (n===1) renderXmr();
+  if (n===2) { if (!sprints.length) initSprints(); runMonteCarlo(); }
+  if (n===3) renderEpics();
+}
+
+// ===== INIT =====
+initSprints();
+renderAll();
 </script>
 </body>
 </html>
