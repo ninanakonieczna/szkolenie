@@ -6,6 +6,7 @@
 <title>Agile Analytics Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #f8f9fc;
@@ -131,8 +132,8 @@
 <header>
   <h1>📊 Agile Analytics</h1>
   <div class="upload-btn">
-    <label for="fileInput">⬆ Upload CSV/JSON</label>
-    <input type="file" id="fileInput" accept=".csv,.json">
+    <label for="fileInput">⬆ Upload CSV / JSON / Excel</label>
+    <input type="file" id="fileInput" accept=".csv,.json,.xlsx,.xls">
     <span id="fileLabel">No file loaded</span>
   </div>
 </header>
@@ -388,6 +389,17 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
     const reader = new FileReader();
     reader.onload = ev => { try { parseRaw(JSON.parse(ev.target.result)); } catch(err) { alert('JSON parse error: ' + err); } };
     reader.readAsText(file);
+  } else if (ext === 'xlsx' || ext === 'xls') {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        parseRaw(data);
+      } catch(err) { alert('Excel parse error: ' + err); }
+    };
+    reader.readAsArrayBuffer(file);
   } else {
     Papa.parse(file, { header: true, skipEmptyLines: true, complete: r => parseRaw(r.data) });
   }
